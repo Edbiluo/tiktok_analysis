@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抖音热点雷达 🔥</title>
+    <style>
+        :root {
+            --bg: #0f0f0f;
+            --card: #1a1a1a;
+            --border: #2a2a2a;
+            --text: #e8e8e8;
+            --text-secondary: #888;
+            --accent: #fe2c55;
+            --accent-light: #ff6b8a;
+            --success: #25d366;
+            --warning: #ffb800;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 16px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header h1 {
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover { background: var(--accent-light); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-secondary {
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        /* 概览卡片 */
+        .overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Tab 切换 */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            background: var(--card);
+            border-radius: 10px;
+            padding: 4px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        /* 视频列表 */
+        .video-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .video-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .video-card:hover { border-color: var(--accent); }
+
+        .video-card.trending { border-left: 3px solid var(--accent); }
+
+        .video-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .video-title {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.4;
+            flex: 1;
+            margin-right: 8px;
+        }
+
+        .video-score {
+            background: var(--accent);
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+
+        .video-author {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .video-stats {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .video-stats span {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .video-stats span strong {
+            color: var(--text);
+        }
+
+        .video-reasons {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--warning);
+        }
+
+        /* 热搜列表 */
+        .hot-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .hot-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .hot-rank {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent);
+            min-width: 24px;
+        }
+
+        .hot-rank.top3 { color: var(--accent); }
+
+        .hot-title {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .hot-value {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        /* 响应式 */
+        @media (max-width: 480px) {
+            body { padding: 12px; }
+            .header h1 { font-size: 18px; }
+            .overview { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔥 抖音热点雷达</h1>
+        <div class="header-actions">
+            <button class="btn btn-primary" id="btn-trigger" onclick="triggerCollect()">
+                ⚡ 立即采集
+            </button>
+        </div>
+    </div>
+
+    <!-- 概览 -->
+    <div class="overview">
+        <div class="stat-card">
+            <div class="number" id="stat-authors">-</div>
+            <div class="label">监控账号</div>
+        </div>
+        <div class="stat-card">
+            <div class="number" id="stat-videos">-</div>
+            <div class="label">视频总量</div>
+        </div>
+        <div class="stat-card">
+            <div class="number" id="stat-trending">-</div>
+            <div class="label">起势预警</div>
+        </div>
+    </div>
+
+    <!-- Tab 切换 -->
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('trending')">🔥 起势</div>
+        <div class="tab" onclick="switchTab('hot')">📈 热搜</div>
+        <div class="tab" onclick="switchTab('authors')">👥 同行</div>
+        <div class="tab" onclick="switchTab('settings')">⚙️ 设置</div>
+    </div>
+
+    <!-- 内容区 -->
+    <div id="content">
+        <div class="loading">加载中...</div>
+    </div>
+
+    <script>
+        const API_BASE = '';  // 同域，留空
+        let currentTab = 'trending';
+        let dashboardData = null;
+
+        // 初始化
+        async function init() {
+            await loadDashboard();
+        }
+
+        // 加载仪表盘数据
+        async function loadDashboard() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/dashboard`);
+                const result = await resp.json();
+                if (result.ok) {
+                    dashboardData = result.data;
+                    renderOverview();
+                    renderContent();
+                }
+            } catch (e) {
+                document.getElementById('content').innerHTML =
+                    '<div class="empty">⚠️ 加载失败，请稍后重试</div>';
+            }
+        }
+
+        // 渲染概览
+        function renderOverview() {
+            const { overview } = dashboardData;
+            document.getElementById('stat-authors').textContent = overview.monitored_authors;
+            document.getElementById('stat-videos').textContent = overview.total_videos;
+            document.getElementById('stat-trending').textContent = overview.trending_alerts;
+        }
+
+        // 切换 Tab
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            renderContent();
+        }
+
+        // 渲染内容
+        function renderContent() {
+            const container = document.getElementById('content');
+
+            switch (currentTab) {
+                case 'trending':
+                    renderTrendingVideos(container);
+                    break;
+                case 'hot':
+                    renderHotTopics(container);
+                    break;
+                case 'authors':
+                    renderAuthors(container);
+                    break;
+                case 'settings':
+                    renderSettings(container);
+                    break;
+            }
+        }
+
+        // 渲染起势视频
+        function renderTrendingVideos(container) {
+            const videos = dashboardData?.trending_videos || [];
+            if (!videos.length) {
+                container.innerHTML = '<div class="empty">暂无起势视频，等待下次采集</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="video-list">' + videos.map(v => `
+                <div class="video-card ${v.score >= 60 ? 'trending' : ''}">
+                    <div class="video-header">
+                        <div class="video-title">${escHtml(v.title || '无标题')}</div>
+                        ${v.score ? `<span class="video-score">${v.score}分</span>` : ''}
+                    </div>
+                    <div class="video-author">@${escHtml(v.author_name || '未知')}</div>
+                    <div class="video-stats">
+                        <span>▶ <strong>${formatNum(v.play_count)}</strong></span>
+                        <span>❤ <strong>${formatNum(v.like_count)}</strong></span>
+                        <span>💬 <strong>${formatNum(v.comment_count)}</strong></span>
+                        <span>⭐ <strong>${formatNum(v.collect_count)}</strong></span>
+                        <span>↗ <strong>${formatNum(v.share_count)}</strong></span>
+                    </div>
+                    <div style="margin-top:8px">
+                        <a href="https://www.douyin.com/video/${v.id}" target="_blank"
+                           style="color:var(--accent);font-size:12px;text-decoration:none;">
+                            查看视频 →
+                        </a>
+                    </div>
+                </div>
+            `).join('') + '</div>';
+        }
+
+        // 渲染热搜
+        function renderHotTopics(container) {
+            const topics = dashboardData?.hot_topics || [];
+            if (!topics.length) {
+                container.innerHTML = '<div class="empty">暂无热搜数据</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="hot-list">' + topics.map((t, i) => `
+                <div class="hot-item">
+                    <span class="hot-rank ${i < 3 ? 'top3' : ''}">${i + 1}</span>
+                    <span class="hot-title">${escHtml(t.title)}</span>
+                    <span class="hot-value">${formatNum(t.hot_value)}</span>
+                </div>
+            `).join('') + '</div>';
+        }
+
+        // 渲染同行列表
+        function renderAuthors(container) {
+            container.innerHTML = `
+                <div style="margin-bottom:16px">
+                    <div style="display:flex;gap:8px;margin-bottom:12px">
+                        <input type="text" id="input-sec-uid" placeholder="抖音主页链接或 sec_uid"
+                            style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:14px;">
+                        <button class="btn btn-primary" onclick="addAuthor()">添加</button>
+                    </div>
+                    <p style="font-size:12px;color:var(--text-secondary)">
+                        💡 打开抖音网页版 → 进入博主主页 → 复制地址栏链接粘贴到这里
+                    </p>
+                </div>
+                <div id="author-list" class="video-list">
+                    <div class="loading">加载中...</div>
+                </div>
+            `;
+            loadAuthors();
+        }
+
+        async function loadAuthors() {
+            try {
+                const resp = await fetch('/api/authors');
+                const result = await resp.json();
+                const list = document.getElementById('author-list');
+                if (!result.ok || !result.data.length) {
+                    list.innerHTML = '<div class="empty">暂无监控账号</div>';
+                    return;
+                }
+                list.innerHTML = result.data.filter(a => a.is_monitored).map(a => `
+                    <div class="video-card" style="display:flex;align-items:center;justify-content:space-between">
+                        <div>
+                            <div style="font-size:14px;font-weight:500">${escHtml(a.nickname)}</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">
+                                粉丝 ${formatNum(a.follower_count)} · 作品 ${a.video_count || '-'}
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px"
+                            onclick="removeAuthor('${a.id}')">移除</button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('author-list').innerHTML =
+                    '<div class="empty">加载失败</div>';
+            }
+        }
+
+        async function addAuthor() {
+            const input = document.getElementById('input-sec-uid');
+            let value = input.value.trim();
+            if (!value) return;
+
+            // 尝试从 URL 提取 sec_uid
+            const match = value.match(/user\/([^\/?]+)/);
+            const secUid = match ? match[1] : value;
+
+            try {
+                const resp = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action: 'add_author', sec_uid: secUid, nickname: '' }),
+                });
+                const result = await resp.json();
+                if (result.ok) {
+                    input.value = '';
+                    loadAuthors();
+                } else {
+                    alert('添加失败: ' + result.error);
+                }
+            } catch (e) {
+                alert('网络错误');
+            }
+        }
+
+        async function removeAuthor(id) {
+            if (!confirm('确认移除该账号?')) return;
+            try {
+                await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action: 'remove_author', author_id: id }),
+                });
+                loadAuthors();
+            } catch (e) {}
+        }
+
+        // 渲染设置页
+        function renderSettings(container) {
+            container.innerHTML = `
+                <div class="video-list">
+                    <div class="video-card">
+                        <div style="margin-bottom:12px">
+                            <strong>🍪 抖音 Cookie</strong>
+                            <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">
+                                打开 douyin.com → F12 → Network → 复制任意请求的 Cookie 值
+                            </p>
+                        </div>
+                        <textarea id="input-cookie" rows="4" placeholder="粘贴 Cookie..."
+                            style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;resize:vertical;font-family:monospace;"></textarea>
+                        <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+                            <button class="btn btn-primary" onclick="saveCookie()">保存 Cookie</button>
+                            <span id="cookie-status" style="font-size:12px;color:var(--text-secondary)"></span>
+                        </div>
+                    </div>
+
+                    <div class="video-card">
+                        <div style="margin-bottom:12px">
+                            <strong>📤 企微推送测试</strong>
+                            <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">
+                                点击发送一条测试消息到你的企业微信
+                            </p>
+                        </div>
+                        <button class="btn btn-secondary" onclick="testNotify()">发送测试消息</button>
+                        <span id="notify-status" style="font-size:12px;color:var(--text-secondary);margin-left:12px"></span>
+                    </div>
+                </div>
+            `;
+            loadCookieStatus();
+        }
+
+        async function loadCookieStatus() {
+            try {
+                const resp = await fetch('/api/settings');
+                const result = await resp.json();
+                if (result.ok) {
+                    const { cookie_status } = result.data;
+                    const el = document.getElementById('cookie-status');
+                    if (cookie_status.has_cookie) {
+                        el.textContent = '✅ 已配置 (更新于 ' + (cookie_status.updated_at || '未知') + ')';
+                        el.style.color = 'var(--success)';
+                    } else {
+                        el.textContent = '⚠️ 未配置';
+                        el.style.color = 'var(--warning)';
+                    }
+                }
+            } catch (e) {}
+        }
+
+        async function saveCookie() {
+            const cookie = document.getElementById('input-cookie').value.trim();
+            if (!cookie) { alert('请粘贴 Cookie'); return; }
+
+            try {
+                const resp = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action: 'update_cookie', cookie }),
+                });
+                const result = await resp.json();
+                if (result.ok) {
+                    document.getElementById('input-cookie').value = '';
+                    loadCookieStatus();
+                    alert('✅ Cookie 已保存');
+                } else {
+                    alert('保存失败: ' + result.error);
+                }
+            } catch (e) {
+                alert('网络错误');
+            }
+        }
+
+        async function testNotify() {
+            const el = document.getElementById('notify-status');
+            el.textContent = '发送中...';
+            try {
+                const resp = await fetch('/api/test_notify', { method: 'POST' });
+                const result = await resp.json();
+                el.textContent = result.ok ? '✅ 已发送，检查企微' : '❌ ' + result.error;
+                el.style.color = result.ok ? 'var(--success)' : 'var(--accent)';
+            } catch (e) {
+                el.textContent = '❌ 网络错误';
+                el.style.color = 'var(--accent)';
+            }
+        }
+
+        // 手动触发采集
+        async function triggerCollect() {
+            const btn = document.getElementById('btn-trigger');
+            btn.disabled = true;
+            btn.textContent = '⏳ 采集中...';
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/trigger`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ notify: true }),
+                });
+                const result = await resp.json();
+                if (result.ok) {
+                    btn.textContent = '✅ 完成';
+                    await loadDashboard();
+                } else {
+                    btn.textContent = '❌ 失败';
+                }
+            } catch (e) {
+                btn.textContent = '❌ 网络错误';
+            }
+
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = '⚡ 立即采集';
+            }, 3000);
+        }
+
+        // 工具函数
+        function formatNum(num) {
+            if (!num) return '0';
+            if (num >= 10000) return (num / 10000).toFixed(1) + 'w';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return num.toString();
+        }
+
+        function escHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // 启动
+        init();
+    </script>
+</body>
+</html>
