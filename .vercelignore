@@ -1,0 +1,8 @@
+# Force Vercel to use requirements.txt instead of pyproject.toml/uv.lock
+# See: https://github.com/vercel/vercel/issues/14041
+pyproject.toml
+uv.lock
+poetry.lock
+Pipfile
+Pipfile.lock
+.python-version
