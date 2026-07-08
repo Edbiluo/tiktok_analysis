@@ -3,7 +3,7 @@
 用法：
     python -m scripts.collect              # 完整采集（同行 + 热搜）
     python -m scripts.collect --hot-only   # 只采集热搜
-    python -m scripts.collect --notify     # 采集完发送通知
+    python -m scripts.collect --no-notify  # 不发送通知
 """
 
 import sys
@@ -30,10 +30,7 @@ def collect_user_videos(client: DouyinClient, conn, sec_user_id: str) -> list:
         return videos
 
     for video in result["videos"]:
-        # 保存视频基本信息
         save_video(conn, video)
-
-        # 保存数据快照
         save_snapshot(conn, {
             "video_id": video["id"],
             "play_count": video.get("play_count", 0),
@@ -42,7 +39,6 @@ def collect_user_videos(client: DouyinClient, conn, sec_user_id: str) -> list:
             "share_count": video.get("share_count", 0),
             "collect_count": video.get("collect_count", 0),
         })
-
         videos.append(video)
 
     return videos
@@ -70,27 +66,63 @@ def analyze_videos(conn, videos: list) -> list:
     results = []
 
     for video in videos:
-        # 获取作者历史数据
         author_stats = get_author_avg_stats(conn, video.get("author_id", ""))
-
-        # 分析
         analysis = analyzer.analyze_video(video, author_stats)
-
         results.append({
             "video": video,
             "analysis": analysis,
         })
 
-    # 按评分排序
     results.sort(key=lambda x: x["analysis"]["score"], reverse=True)
     return results
+
+
+def is_already_alerted(conn, video_id: str) -> bool:
+    """检查该视频是否已经推送过"""
+    cursor = conn.execute(
+        "SELECT COUNT(*) FROM alerts WHERE video_id = ? AND sent = 1",
+        (video_id,)
+    )
+    return cursor.fetchone()[0] > 0
+
+
+def save_alert(conn, video_id: str, alert_type: str, score: float, message: str):
+    """保存推送记录"""
+    conn.execute("""
+        INSERT INTO alerts (video_id, alert_type, score, message, sent)
+        VALUES (?, ?, ?, ?, 1)
+    """, (video_id, alert_type, score, message))
+    conn.commit()
+
+
+def check_cookie_valid(client: DouyinClient, conn, notifier: Notifier):
+    """检测 Cookie 是否失效，失效则推送提醒"""
+    # 尝试获取一个用户的视频，如果返回空可能是 Cookie 问题
+    cursor = conn.execute("SELECT id, nickname FROM authors WHERE is_monitored = 1 LIMIT 1")
+    row = cursor.fetchone()
+    if not row:
+        return  # 没有监控账号，跳过检测
+
+    result = client.get_user_videos(row[0], count=1)
+    if result is None:
+        # 检查是否最近已经提醒过（24小时内）
+        cursor = conn.execute("""
+            SELECT COUNT(*) FROM alerts
+            WHERE alert_type = 'cookie_expired'
+            AND created_at > datetime('now', '-24 hours')
+        """)
+        already_warned = cursor.fetchone()[0] > 0
+
+        if not already_warned:
+            notifier.send_text("⚠️ 抖音 Cookie 可能已失效，同行数据无法采集。\n\n请打开仪表盘设置页更新 Cookie：\nhttps://tiktok-analysis-lime.vercel.app")
+            save_alert(conn, "cookie", "cookie_expired", 0, "Cookie 失效提醒")
+            print("  ⚠️  Cookie 可能失效，已发送提醒")
 
 
 def run_collection(hot_only: bool = False, notify: bool = True):
     """执行一次完整采集"""
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 开始采集...")
 
-    # 初始化
     conn = init_db()
     client = DouyinClient()
     notifier = Notifier()
@@ -105,13 +137,15 @@ def run_collection(hot_only: bool = False, notify: bool = True):
         print(f"     获取到 {len(hot_topics)} 条热搜")
 
         if not hot_only:
+            # Cookie 有效性检测
+            check_cookie_valid(client, conn, notifier)
+
             # 获取监控列表
             cursor = conn.execute("SELECT id, nickname FROM authors WHERE is_monitored = 1")
             authors = cursor.fetchall()
 
             if not authors:
                 print("  ⚠️  监控列表为空，请先导入关注账号")
-                print("     运行: python -m scripts.import_following")
                 return
 
             print(f"  👥 采集 {len(authors)} 个同行账号...")
@@ -119,8 +153,7 @@ def run_collection(hot_only: bool = False, notify: bool = True):
                 print(f"     [{i}/{len(authors)}] {nickname}...")
                 videos = collect_user_videos(client, conn, sec_uid)
                 all_videos.extend(videos)
-                # 避免请求过快
-                time.sleep(2)
+                time.sleep(2)  # 避免请求过快
 
             print(f"     共采集 {len(all_videos)} 条视频")
 
@@ -130,13 +163,24 @@ def run_collection(hot_only: bool = False, notify: bool = True):
         trending = [r for r in results if r["analysis"]["is_trending"]]
         print(f"     发现 {len(trending)} 条起势视频")
 
-        # 通知
+        # 通知（防重复：只推没推过的）
         if notify and trending:
-            print("  📤 发送企微通知...")
-            for item in trending[:3]:  # 最多推 3 条
-                notifier.send_trending_alert(item["video"], item["analysis"])
-                time.sleep(1)
-            print("     ✅ 通知已发送")
+            new_alerts = []
+            for item in trending:
+                vid = item["video"]["id"]
+                if not is_already_alerted(conn, vid):
+                    new_alerts.append(item)
+
+            if new_alerts:
+                print(f"  📤 发送 {len(new_alerts)} 条新预警...")
+                for item in new_alerts[:5]:  # 单次最多推 5 条
+                    notifier.send_trending_alert(item["video"], item["analysis"])
+                    save_alert(conn, item["video"]["id"], "trending",
+                               item["analysis"]["score"], item["video"].get("title", ""))
+                    time.sleep(1)
+                print("     ✅ 通知已发送")
+            else:
+                print("  ℹ️  起势视频均已推送过，无新增")
 
         # 输出报告
         print("\n" + "=" * 50)
