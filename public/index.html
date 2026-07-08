@@ -354,15 +354,40 @@
             }
         }
 
+        // 排序状态
+        let trendingSort = 'hot'; // 'hot' 或 'time'
+
         // 渲染起势视频
         function renderTrendingVideos(container) {
-            const videos = dashboardData?.trending_videos || [];
+            let videos = [...(dashboardData?.trending_videos || [])];
             if (!videos.length) {
                 container.innerHTML = '<div class="empty">暂无起势视频，等待下次采集</div>';
                 return;
             }
 
-            container.innerHTML = '<div class="video-list">' + videos.map(v => `
+            // 排序
+            if (trendingSort === 'hot') {
+                videos.sort((a, b) => {
+                    const hotA = (a.like_count || 0) + (a.comment_count || 0) + (a.share_count || 0);
+                    const hotB = (b.like_count || 0) + (b.comment_count || 0) + (b.share_count || 0);
+                    return hotB - hotA;
+                });
+            } else {
+                videos.sort((a, b) => {
+                    const tA = typeof a.created_at === 'number' ? a.created_at : new Date(a.created_at).getTime() / 1000;
+                    const tB = typeof b.created_at === 'number' ? b.created_at : new Date(b.created_at).getTime() / 1000;
+                    return tB - tA;
+                });
+            }
+
+            const sortBar = `
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                    <button class="btn ${trendingSort === 'hot' ? 'btn-primary' : 'btn-secondary'}" onclick="setTrendingSort('hot')" style="font-size:12px;padding:6px 12px;">🔥 热度排序</button>
+                    <button class="btn ${trendingSort === 'time' ? 'btn-primary' : 'btn-secondary'}" onclick="setTrendingSort('time')" style="font-size:12px;padding:6px 12px;">🕐 时间排序</button>
+                </div>
+            `;
+
+            container.innerHTML = sortBar + '<div class="video-list">' + videos.map(v => `
                 <div class="video-card ${v.score >= 60 ? 'trending' : ''}">
                     <div class="video-header">
                         <div class="video-title">${escHtml(v.title || '无标题')}</div>
@@ -384,6 +409,11 @@
                     </div>
                 </div>
             `).join('') + '</div>';
+        }
+
+        function setTrendingSort(sort) {
+            trendingSort = sort;
+            renderContent();
         }
 
         // 渲染热搜
@@ -621,7 +651,6 @@
 
         function formatDate(ts) {
             if (!ts) return '';
-            // 支持 Unix 时间戳（秒）和日期字符串
             let date;
             if (typeof ts === 'number') {
                 date = ts > 1e12 ? new Date(ts) : new Date(ts * 1000);
@@ -629,12 +658,12 @@
                 date = new Date(ts);
             }
             if (isNaN(date.getTime())) return '';
-            const now = new Date();
-            const diff = (now - date) / 1000;
-            if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
-            if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
-            if (diff < 86400 * 30) return Math.floor(diff / 86400) + '天前';
-            return (date.getMonth() + 1) + '/' + date.getDate();
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            const h = String(date.getHours()).padStart(2, '0');
+            const min = String(date.getMinutes()).padStart(2, '0');
+            return `${y}-${m}-${d} ${h}:${min}`;
         }
 
         function escHtml(str) {
