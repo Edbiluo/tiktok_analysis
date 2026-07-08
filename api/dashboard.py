@@ -4,6 +4,7 @@ import json
 import sys
 import os
 from http.server import BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.database import init_db
@@ -11,11 +12,16 @@ from core.database import init_db
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        """获取仪表盘概览数据"""
+        """获取仪表盘概览数据（支持分页）"""
         try:
+            query = parse_qs(urlparse(self.path).query)
+            page = int(query.get("page", ["1"])[0])
+            page_size = int(query.get("page_size", ["20"])[0])
+            offset = (page - 1) * page_size
+
             conn = init_db()
 
-            # 获取起势视频（最近 24 小时内评分最高的）
+            # 获取起势视频（分页）
             cursor = conn.execute("""
                 SELECT
                     v.id, v.title, v.author_id, v.cover_url, v.created_at,
@@ -31,8 +37,8 @@ class handler(BaseHTTPRequestHandler):
                     SELECT MAX(id) FROM video_snapshots GROUP BY video_id
                 )
                 ORDER BY al.score DESC NULLS LAST, vs.like_count DESC
-                LIMIT 20
-            """)
+                LIMIT ? OFFSET ?
+            """, (page_size, offset))
 
             videos = []
             for row in cursor.fetchall():
@@ -54,21 +60,29 @@ class handler(BaseHTTPRequestHandler):
                     "alert_type": row[14],
                 })
 
-            # 获取最新热搜
+            # 总数
             cursor = conn.execute("""
-                SELECT title, hot_value, snapshot_at
-                FROM trending_topics
-                ORDER BY snapshot_at DESC, hot_value DESC
-                LIMIT 20
+                SELECT COUNT(DISTINCT v.id) FROM videos v
+                LEFT JOIN video_snapshots vs ON v.id = vs.video_id
+                WHERE vs.id IN (SELECT MAX(id) FROM video_snapshots GROUP BY video_id)
             """)
+            total = cursor.fetchone()[0]
 
+            # 获取最新热搜（只在第一页返回）
             hot_topics = []
-            for row in cursor.fetchall():
-                hot_topics.append({
-                    "title": row[0],
-                    "hot_value": row[1],
-                    "snapshot_at": row[2],
-                })
+            if page == 1:
+                cursor = conn.execute("""
+                    SELECT title, hot_value, snapshot_at
+                    FROM trending_topics
+                    ORDER BY snapshot_at DESC, hot_value DESC
+                    LIMIT 30
+                """)
+                for row in cursor.fetchall():
+                    hot_topics.append({
+                        "title": row[0],
+                        "hot_value": row[1],
+                        "snapshot_at": row[2],
+                    })
 
             # 统计概览
             cursor = conn.execute("SELECT COUNT(*) FROM authors WHERE is_monitored = 1")
@@ -90,6 +104,12 @@ class handler(BaseHTTPRequestHandler):
                     },
                     "trending_videos": videos,
                     "hot_topics": hot_topics,
+                    "pagination": {
+                        "page": page,
+                        "page_size": page_size,
+                        "total": total,
+                        "has_more": offset + page_size < total,
+                    },
                 }
             }
 

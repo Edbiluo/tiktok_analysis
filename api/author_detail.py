@@ -18,6 +18,9 @@ class handler(BaseHTTPRequestHandler):
             query = parse_qs(urlparse(self.path).query)
             author_id = query.get("id", [""])[0]
             period = query.get("period", ["all"])[0]  # month, half_year, year, all
+            page = int(query.get("page", ["1"])[0])
+            page_size = int(query.get("page_size", ["20"])[0])
+            offset = (page - 1) * page_size
 
             if not author_id:
                 self.send_response(400)
@@ -85,8 +88,8 @@ class handler(BaseHTTPRequestHandler):
                     GROUP BY video_id
                 )
                 ORDER BY hot_score DESC
-                LIMIT 30
-            """, params)
+                LIMIT ? OFFSET ?
+            """, params + [page_size, offset])
 
             videos = []
             for row in cursor.fetchall():
@@ -140,6 +143,12 @@ class handler(BaseHTTPRequestHandler):
                     "author": author,
                     "avg_stats": avg_stats,
                     "top_videos": videos,
+                    "pagination": {
+                        "page": page,
+                        "page_size": page_size,
+                        "total": avg_stats["total_tracked"],
+                        "has_more": offset + page_size < avg_stats["total_tracked"],
+                    },
                 }
             }, ensure_ascii=False).encode())
 

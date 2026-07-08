@@ -296,19 +296,36 @@
         const API_BASE = '';  // 同域，留空
         let currentTab = 'trending';
         let dashboardData = null;
+        let trendingPage = 1;
+        let trendingLoading = false;
+        let trendingHasMore = true;
+        let allTrendingVideos = [];
 
         // 初始化
         async function init() {
             await loadDashboard();
+            // 触底加载
+            window.addEventListener('scroll', () => {
+                if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+                    if (currentTab === 'trending' && trendingHasMore && !trendingLoading) {
+                        loadMoreTrending();
+                    }
+                }
+            });
         }
 
         // 加载仪表盘数据
         async function loadDashboard() {
             try {
-                const resp = await fetch(`${API_BASE}/api/dashboard`);
+                trendingPage = 1;
+                allTrendingVideos = [];
+                trendingHasMore = true;
+                const resp = await fetch(`${API_BASE}/api/dashboard?page=1&page_size=20`);
                 const result = await resp.json();
                 if (result.ok) {
                     dashboardData = result.data;
+                    allTrendingVideos = result.data.trending_videos || [];
+                    trendingHasMore = result.data.pagination?.has_more ?? false;
                     renderOverview();
                     renderContent();
                 }
@@ -316,6 +333,22 @@
                 document.getElementById('content').innerHTML =
                     '<div class="empty">⚠️ 加载失败，请稍后重试</div>';
             }
+        }
+
+        async function loadMoreTrending() {
+            trendingLoading = true;
+            trendingPage++;
+            try {
+                const resp = await fetch(`${API_BASE}/api/dashboard?page=${trendingPage}&page_size=20`);
+                const result = await resp.json();
+                if (result.ok) {
+                    const newVideos = result.data.trending_videos || [];
+                    allTrendingVideos = allTrendingVideos.concat(newVideos);
+                    trendingHasMore = result.data.pagination?.has_more ?? false;
+                    renderContent();
+                }
+            } catch (e) {}
+            trendingLoading = false;
         }
 
         // 渲染概览
@@ -359,7 +392,7 @@
 
         // 渲染起势视频
         function renderTrendingVideos(container) {
-            let videos = [...(dashboardData?.trending_videos || [])];
+            let videos = [...allTrendingVideos];
             if (!videos.length) {
                 container.innerHTML = '<div class="empty">暂无起势视频，等待下次采集</div>';
                 return;
@@ -408,7 +441,8 @@
                         </a>
                     </div>
                 </div>
-            `).join('') + '</div>';
+            `).join('') + '</div>' +
+                (trendingHasMore ? '<div class="loading" style="padding:20px;text-align:center">滑动加载更多...</div>' : '<div style="padding:12px;text-align:center;font-size:12px;color:var(--text-secondary)">已加载全部</div>');
         }
 
         function setTrendingSort(sort) {
