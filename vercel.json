@@ -12,6 +12,7 @@
   ],
   "routes": [
     { "src": "/api/dashboard", "dest": "api/dashboard.py" },
+    { "src": "/api/author_detail", "dest": "api/author_detail.py" },
     { "src": "/api/authors", "dest": "api/authors.py" },
     { "src": "/api/settings", "dest": "api/settings.py" },
     { "src": "/api/trigger", "dest": "api/trigger.py" },

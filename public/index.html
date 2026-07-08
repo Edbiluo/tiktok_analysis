@@ -393,7 +393,7 @@
                         <div class="video-title">${escHtml(v.title || '无标题')}</div>
                         ${v.score ? `<span class="video-score">${v.score}分</span>` : ''}
                     </div>
-                    <div class="video-author">@${escHtml(v.author_name || '未知')} · ${formatDate(v.created_at)}</div>
+                    <div class="video-author"><a href="javascript:void(0)" onclick="showAuthorDetail('${v.author_id}')" style="color:var(--text-secondary);text-decoration:none;">@${escHtml(v.author_name || '未知')}</a> · ${formatDate(v.created_at)}</div>
                     <div class="video-stats">
                         <span>▶ <strong>${formatNum(v.play_count)}</strong></span>
                         <span>❤ <strong>${formatNum(v.like_count)}</strong></span>
@@ -414,6 +414,79 @@
         function setTrendingSort(sort) {
             trendingSort = sort;
             renderContent();
+        }
+
+        // 作者详情弹窗
+        let authorDetailPeriod = 'all';
+
+        async function showAuthorDetail(authorId, period) {
+            if (!authorId) return;
+            if (period) authorDetailPeriod = period;
+            const container = document.getElementById('content');
+            container.innerHTML = '<div class="loading">加载作者详情...</div>';
+
+            try {
+                const resp = await fetch(`/api/author_detail?id=${encodeURIComponent(authorId)}&period=${authorDetailPeriod}`);
+                const result = await resp.json();
+                if (!result.ok) {
+                    container.innerHTML = `<div class="empty">加载失败: ${result.error}</div>`;
+                    return;
+                }
+
+                const { author, avg_stats, top_videos } = result.data;
+
+                const periodBtns = ['month', 'half_year', 'year', 'all'].map(p => {
+                    const labels = { month: '近1月', half_year: '近半年', year: '近1年', all: '全部' };
+                    const cls = p === authorDetailPeriod ? 'btn-primary' : 'btn-secondary';
+                    return `<button class="btn ${cls}" onclick="showAuthorDetail('${authorId}','${p}')" style="font-size:12px;padding:5px 10px;">${labels[p]}</button>`;
+                }).join('');
+
+                container.innerHTML = `
+                    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+                        <button class="btn btn-secondary" onclick="authorDetailPeriod='all';renderContent()" style="font-size:12px;padding:6px 12px;">← 返回</button>
+                        <div style="display:flex;gap:4px;margin-left:auto;">${periodBtns}</div>
+                    </div>
+                    <div class="video-card" style="margin-bottom:16px">
+                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                            ${author.avatar_url ? `<img src="${author.avatar_url}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;">` : ''}
+                            <div>
+                                <div style="font-size:16px;font-weight:600">${escHtml(author.nickname || '未知')}</div>
+                                <div style="font-size:12px;color:var(--text-secondary)">粉丝 ${formatNum(author.follower_count)} · 作品 ${author.video_count || '-'}</div>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary)">
+                            <span>平均播放 <strong style="color:var(--text)">${formatNum(avg_stats.avg_plays)}</strong></span>
+                            <span>平均点赞 <strong style="color:var(--text)">${formatNum(avg_stats.avg_likes)}</strong></span>
+                            <span>平均评论 <strong style="color:var(--text)">${formatNum(avg_stats.avg_comments)}</strong></span>
+                            <span>平均收藏 <strong style="color:var(--text)">${formatNum(avg_stats.avg_collects)}</strong></span>
+                            <span>已追踪 <strong style="color:var(--text)">${avg_stats.total_tracked}</strong> 条</span>
+                        </div>
+                    </div>
+                    <div style="font-size:14px;font-weight:500;margin-bottom:8px;">📊 数据最好的作品（按热度排序）</div>
+                    <div class="video-list">
+                        ${top_videos.length ? top_videos.map((v, i) => `
+                            <div class="video-card">
+                                <div class="video-header">
+                                    <div class="video-title"><span style="color:var(--accent);margin-right:4px;">#${i+1}</span>${escHtml(v.title || '无标题')}</div>
+                                </div>
+                                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">${formatDate(v.created_at)}</div>
+                                <div class="video-stats">
+                                    <span>▶ <strong>${formatNum(v.play_count)}</strong></span>
+                                    <span>❤ <strong>${formatNum(v.like_count)}</strong></span>
+                                    <span>💬 <strong>${formatNum(v.comment_count)}</strong></span>
+                                    <span>⭐ <strong>${formatNum(v.collect_count)}</strong></span>
+                                    <span>↗ <strong>${formatNum(v.share_count)}</strong></span>
+                                </div>
+                                <div style="margin-top:6px">
+                                    <a href="https://www.douyin.com/video/${v.id}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none;">查看视频 →</a>
+                                </div>
+                            </div>
+                        `).join('') : '<div class="empty">该时间段内暂无数据</div>'}
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = '<div class="empty">网络错误</div>';
+            }
         }
 
         // 渲染热搜
