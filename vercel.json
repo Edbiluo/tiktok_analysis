@@ -12,7 +12,7 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/WW_verify_(.*)", "dest": "/web/WW_verify_$1" },
+    { "src": "/WW_verify_icUqTWqVPjBjx5sl.txt", "dest": "/api/WW_verify_icUqTWqVPjBjx5sl" },
     { "src": "/(.*)", "dest": "/web/$1" }
   ]
 }
