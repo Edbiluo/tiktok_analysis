@@ -11,8 +11,14 @@
     }
   ],
   "routes": [
-    { "src": "/WW_verify_icUqTWqVPjBjx5sl.txt", "dest": "/api/WW_verify_icUqTWqVPjBjx5sl" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/public/index.html" }
+    { "src": "/api/dashboard", "dest": "api/dashboard.py" },
+    { "src": "/api/authors", "dest": "api/authors.py" },
+    { "src": "/api/settings", "dest": "api/settings.py" },
+    { "src": "/api/trigger", "dest": "api/trigger.py" },
+    { "src": "/api/test_notify", "dest": "api/test_notify.py" },
+    { "src": "/api/wecom_callback", "dest": "api/wecom_callback.py" },
+    { "src": "/api/WW_verify_icUqTWqVPjBjx5sl", "dest": "api/WW_verify_icUqTWqVPjBjx5sl.py" },
+    { "src": "/WW_verify_icUqTWqVPjBjx5sl.txt", "dest": "api/WW_verify_icUqTWqVPjBjx5sl.py" },
+    { "src": "/(.*)", "dest": "public/$1" }
   ]
 }
