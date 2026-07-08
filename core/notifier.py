@@ -47,7 +47,7 @@ class Notifier:
         })
 
     def send_trending_alert(self, video: dict, analysis: dict, ai_result: dict = None) -> bool:
-        """发送起势预警（含 AI 分析）"""
+        """发送起势预警（含 AI 分析，合并为一条消息）"""
         score = analysis["score"]
         reasons = "\n".join(analysis["reasons"])
 
@@ -61,22 +61,19 @@ class Notifier:
 > 评论 {self._fmt(video.get('comment_count', 0))} | 收藏 {self._fmt(video.get('collect_count', 0))}
 
 💡 起势原因:
-{reasons}
+{reasons}"""
 
-🔗 [查看视频](https://www.douyin.com/video/{video.get('id', '')})"""
-
-        self.send_markdown(content)
-
-        # 如果有 AI 分析结果，单独发一条
-        if ai_result and ai_result.get("explosion_point"):
+        # 合并 AI 分析到同一条消息
+        if ai_result and ai_result.get("explosion_point") and "分析失败" not in ai_result.get("explosion_point", ""):
             ideas = "\n".join([f"> {i+1}. {idea}" for i, idea in enumerate(ai_result.get("content_ideas", [])[:3])])
 
-            ai_content = f"""🧠 **AI 爆点分析**
+            content += f"""
 
-🎯 **为什么火:**
+🧠 **AI 爆点分析:**
 {ai_result.get('explosion_point', '')}
-
-{f"💬 **评论区洞察:**\n{ai_result.get('comment_insight', '')}" if ai_result.get('comment_insight') else ""}
+{f'''
+💬 **评论洞察:**
+{ai_result.get("comment_insight", "")}''' if ai_result.get('comment_insight') else ''}
 
 🔗 **手工赛道怎么蹭:**
 {ai_result.get('handcraft_angle', '')}
@@ -84,9 +81,11 @@ class Notifier:
 📝 **选题建议:**
 {ideas}"""
 
-            return self.send_markdown(ai_content)
+        content += f"""
 
-        return True
+🔗 [查看视频](https://www.douyin.com/video/{video.get('id', '')})"""
+
+        return self.send_markdown(content)
 
     def send_daily_report(self, trending_videos: list, hot_topics: list) -> bool:
         """发送每日汇总报告"""
