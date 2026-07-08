@@ -1,0 +1,24 @@
+name: 测试AI网关连通性
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 测试 office 网关 + gemini
+        run: |
+          curl -s "https://ai-gateway-office-in.hszq8.com/v1/chat/completions" \
+            -H "Authorization: Bearer ${{ secrets.AI_GATEWAY_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"model":"gemini-3-flash","messages":[{"role":"user","content":"说ok"}],"max_tokens":10}' \
+            && echo "✅ office 网关可达" || echo "❌ office 网关不可达"
+
+      - name: 测试 code 网关 + claude
+        run: |
+          curl -s "https://ai-gateway-code-in.hszq8.com/v1/chat/completions" \
+            -H "Authorization: Bearer ${{ secrets.AI_GATEWAY_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"model":"claude-haiku-4-5","messages":[{"role":"user","content":"说ok"}],"max_tokens":10}' \
+            && echo "✅ code 网关可达" || echo "❌ code 网关不可达"
