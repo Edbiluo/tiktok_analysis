@@ -13,14 +13,14 @@ def get_connection():
     """
     if Config.TURSO_DATABASE_URL:
         try:
-            import libsql_experimental as libsql
+            import libsql
             conn = libsql.connect(
                 database=Config.TURSO_DATABASE_URL,
                 auth_token=Config.TURSO_AUTH_TOKEN,
             )
             return conn
         except ImportError:
-            print("[WARN] libsql_experimental 未安装，降级到本地 SQLite")
+            print("[WARN] libsql 未安装，降级到本地 SQLite")
 
     # 本地 SQLite
     db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "local.db")

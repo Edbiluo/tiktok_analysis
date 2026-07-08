@@ -50,7 +50,7 @@ class AIAnalyzer:
 - 收藏：{video.get('collect_count', 0)}
 - 分享：{video.get('share_count', 0)}
 
-{f"## 热门评论\n{comments_text}" if comments_text else ""}
+{"## 热门评论" + chr(10) + comments_text if comments_text else ""}
 
 请按以下格式回答（每部分 2-3 句话，简洁有力）：
 
