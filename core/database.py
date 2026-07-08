@@ -1,19 +1,30 @@
 """抖音热点雷达 - 数据库模块"""
 
-import libsql_experimental as libsql
+import os
+import sqlite3
 from core.config import Config
 
 
 def get_connection():
-    """获取数据库连接"""
+    """获取数据库连接
+
+    优先使用 Turso（线上），降级到本地 SQLite（开发）。
+    Turso 通过 libsql_experimental 连接，本地用标准 sqlite3。
+    """
     if Config.TURSO_DATABASE_URL:
-        conn = libsql.connect(
-            database=Config.TURSO_DATABASE_URL,
-            auth_token=Config.TURSO_AUTH_TOKEN,
-        )
-    else:
-        # 本地开发用 SQLite
-        conn = libsql.connect(database="local.db")
+        try:
+            import libsql_experimental as libsql
+            conn = libsql.connect(
+                database=Config.TURSO_DATABASE_URL,
+                auth_token=Config.TURSO_AUTH_TOKEN,
+            )
+            return conn
+        except ImportError:
+            print("[WARN] libsql_experimental 未安装，降级到本地 SQLite")
+
+    # 本地 SQLite
+    db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "local.db")
+    conn = sqlite3.connect(db_path)
     return conn
 
 
