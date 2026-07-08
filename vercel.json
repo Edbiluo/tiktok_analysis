@@ -1,6 +1,18 @@
 {
   "version": 2,
-  "rewrites": [
-    { "source": "/WW_verify_icUqTWqVPjBjx5sl.txt", "destination": "/api/WW_verify_icUqTWqVPjBjx5sl" }
+  "builds": [
+    {
+      "src": "api/**/*.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/WW_verify_icUqTWqVPjBjx5sl.txt", "dest": "/api/WW_verify_icUqTWqVPjBjx5sl" },
+    { "src": "/(.*)", "dest": "/public/$1" }
   ]
 }
