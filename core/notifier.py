@@ -47,45 +47,46 @@ class Notifier:
         })
 
     def send_trending_alert(self, video: dict, analysis: dict, ai_result: dict = None) -> bool:
-        """发送起势预警（含 AI 分析，合并为一条消息）"""
+        """发送起势预警 + AI 分析（拆成两条，间隔发送避免截断）"""
         score = analysis["score"]
         reasons = "\n".join(analysis["reasons"])
 
+        # 第一条：数据预警
         content = f"""🔥 <font color="warning">起势预警</font> (评分: {score}/100)
 
 **{video.get('title', '无标题')}**
 作者: {video.get('author_name', '未知')}
 
-📊 数据概览:
-> 播放 {self._fmt(video.get('play_count', 0))} | 点赞 {self._fmt(video.get('like_count', 0))}
-> 评论 {self._fmt(video.get('comment_count', 0))} | 收藏 {self._fmt(video.get('collect_count', 0))}
+📊 数据:
+> 播放 {self._fmt(video.get('play_count', 0))} | 赞 {self._fmt(video.get('like_count', 0))} | 评 {self._fmt(video.get('comment_count', 0))} | 藏 {self._fmt(video.get('collect_count', 0))}
 
-💡 起势原因:
-{reasons}"""
-
-        # 合并 AI 分析到同一条消息
-        if ai_result and ai_result.get("explosion_point") and "分析失败" not in ai_result.get("explosion_point", ""):
-            ideas = "\n".join([f"> {i+1}. {idea}" for i, idea in enumerate(ai_result.get("content_ideas", [])[:3])])
-
-            content += f"""
-
-🧠 **AI 爆点分析:**
-{ai_result.get('explosion_point', '')}
-{f'''
-💬 **评论洞察:**
-{ai_result.get("comment_insight", "")}''' if ai_result.get('comment_insight') else ''}
-
-🔗 **手工赛道怎么蹭:**
-{ai_result.get('handcraft_angle', '')}
-
-📝 **选题建议:**
-{ideas}"""
-
-        content += f"""
+{reasons}
 
 🔗 [查看视频](https://www.douyin.com/video/{video.get('id', '')})"""
 
-        return self.send_markdown(content)
+        self.send_markdown(content)
+
+        # 第二条：AI 分析（精简版，控制在 4096 字节内）
+        if ai_result and ai_result.get("explosion_point") and "分析失败" not in ai_result.get("explosion_point", ""):
+            ideas = "\n".join([f"{i+1}. {idea[:50]}" for i, idea in enumerate(ai_result.get("content_ideas", [])[:3])])
+
+            explosion = ai_result.get('explosion_point', '')[:200]
+            angle = ai_result.get('handcraft_angle', '')[:200]
+
+            ai_content = f"""🧠 **AI 分析** | {video.get('title', '')[:15]}
+
+🎯 **爆点:** {explosion}
+
+🔗 **手工怎么蹭:** {angle}
+
+📝 **选题:**
+{ideas}"""
+
+            import time
+            time.sleep(2)  # 间隔 2 秒避免被吞
+            return self.send_markdown(ai_content)
+
+        return True
 
     def send_daily_report(self, trending_videos: list, hot_topics: list) -> bool:
         """发送每日汇总报告"""
