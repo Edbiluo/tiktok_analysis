@@ -156,24 +156,15 @@ def check_analyzer():
 
 
 def check_notifier():
-    """4. 检查企微推送"""
-    from core.notifier import WeComNotifier
+    """4. 检查推送（企微群机器人 Webhook）"""
+    from core.notifier import Notifier
 
-    notifier = WeComNotifier()
-
-    print("  获取 access_token...")
-    try:
-        token = notifier._get_access_token()
-        print(f"  access_token: {token[:20]}... (OK)")
-    except Exception as e:
-        print(f"  access_token 获取失败: {e}")
-        print("  提示: 可能是网络问题(公司SSL)，部署到线上后不影响")
-        return False
+    notifier = Notifier()
 
     print("  发送测试消息...")
     ok = notifier.send_text("[验收测试] 抖音热点雷达连接成功！")
     if ok:
-        print("  推送: OK (请检查企业微信是否收到)")
+        print("  推送: OK (请检查企业微信群)")
     else:
         print("  推送: FAILED")
 

@@ -12,7 +12,7 @@ import argparse
 from core.douyin import DouyinClient
 from core.database import init_db, save_author, save_video, save_snapshot, get_author_avg_stats
 from core.analyzer import TrendingAnalyzer
-from core.notifier import WeComNotifier
+from core.notifier import Notifier
 
 
 def collect_user_videos(client: DouyinClient, conn, sec_user_id: str) -> list:
@@ -93,7 +93,7 @@ def run_collection(hot_only: bool = False, notify: bool = True):
     # 初始化
     conn = init_db()
     client = DouyinClient()
-    notifier = WeComNotifier()
+    notifier = Notifier()
 
     all_videos = []
     hot_topics = []

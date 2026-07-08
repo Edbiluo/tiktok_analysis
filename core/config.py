@@ -14,6 +14,7 @@ class Config:
     WECOM_AGENT_ID = os.getenv("WECOM_AGENT_ID", "")
     WECOM_SECRET = os.getenv("WECOM_SECRET", "")
     WECOM_USER_ID = os.getenv("WECOM_USER_ID", "XuXingXin")
+    WECOM_WEBHOOK_URL = os.getenv("WECOM_WEBHOOK_URL", "")
 
     # 抖音
     DOUYIN_COOKIE = os.getenv("DOUYIN_COOKIE", "")
