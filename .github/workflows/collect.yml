@@ -2,10 +2,10 @@ name: 抖音热点采集
 
 on:
   schedule:
-    # 热搜监控：每 10 分钟
-    - cron: '*/10 * * * *'
-    # 同行账号全量采集：每 2 小时
-    - cron: '7 */2 * * *'
+    # 白天 8:00-22:00 (UTC+8 即 UTC 0:00-14:00)：每15分钟全量采集
+    - cron: '*/15 0-14 * * *'
+    # 晚上 22:00-8:00 (UTC+8 即 UTC 14:00-24:00)：每2小时采集
+    - cron: '7 14,16,18,20,22 * * *'
 
   # 支持手动触发
   workflow_dispatch:
@@ -42,14 +42,10 @@ jobs:
       - name: 判断采集模式
         id: mode
         run: |
-          # 手动触发时用用户选择
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
-          # 定时触发时根据 cron 判断
-          elif [ "$(date +%M)" -lt 15 ] && [ "$(($(date +%H) % 2))" -eq 0 ]; then
-            echo "mode=full" >> $GITHUB_OUTPUT
           else
-            echo "mode=hot-only" >> $GITHUB_OUTPUT
+            echo "mode=full" >> $GITHUB_OUTPUT
           fi
 
       - name: 运行采集

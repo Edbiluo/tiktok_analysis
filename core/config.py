@@ -30,7 +30,7 @@ class Config:
 
     # 采集配置
     MONITOR_INTERVAL_HOURS = int(os.getenv("MONITOR_INTERVAL_HOURS", "4"))
-    TRENDING_THRESHOLD = float(os.getenv("TRENDING_THRESHOLD", "3.0"))
+    TRENDING_THRESHOLD = float(os.getenv("TRENDING_THRESHOLD", "2.5"))
 
     # 起势评分权重
     SCORE_WEIGHTS = {
