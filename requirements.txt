@@ -10,5 +10,8 @@ python-dotenv==1.0.1
 # 数据处理
 pandas==2.2.0
 
+# 加密（企微回调验证）
+pycryptodome==3.20.0
+
 # 定时任务（本地开发用）
 schedule==1.2.1
