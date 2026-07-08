@@ -64,7 +64,7 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           AI_GATEWAY_URL: ${{ secrets.AI_GATEWAY_URL }}
           AI_GATEWAY_KEY: ${{ secrets.AI_GATEWAY_KEY }}
-          AI_MODEL: claude-haiku-4-5
+          AI_MODEL: claude-sonnet-4-6
         run: |
           if [ "${{ steps.mode.outputs.mode }}" = "hot-only" ]; then
             python -m scripts.collect --hot-only

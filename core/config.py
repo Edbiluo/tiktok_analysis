@@ -19,7 +19,7 @@ class Config:
     # AI 分析
     AI_GATEWAY_URL = os.getenv("AI_GATEWAY_URL", "https://ai-gateway-code-in.hszq8.com")
     AI_GATEWAY_KEY = os.getenv("AI_GATEWAY_KEY", "")
-    AI_MODEL = os.getenv("AI_MODEL", "claude-haiku-4-5")
+    AI_MODEL = os.getenv("AI_MODEL", "claude-sonnet-4-6")
 
     # 抖音
     DOUYIN_COOKIE = os.getenv("DOUYIN_COOKIE", "")
