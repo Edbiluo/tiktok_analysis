@@ -1,7 +1,11 @@
 """API - 手动触发采集"""
 
 import json
+import sys
+import os
 from http.server import BaseHTTPRequestHandler
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.collect import run_collection
 
 

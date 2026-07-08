@@ -1,7 +1,11 @@
 """API - 仪表盘数据"""
 
 import json
+import sys
+import os
 from http.server import BaseHTTPRequestHandler
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.database import init_db
 
 

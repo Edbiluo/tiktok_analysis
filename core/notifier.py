@@ -42,8 +42,8 @@ class Notifier:
             "markdown": {"content": content},
         })
 
-    def send_trending_alert(self, video: dict, analysis: dict) -> bool:
-        """发送起势预警"""
+    def send_trending_alert(self, video: dict, analysis: dict, ai_result: dict = None) -> bool:
+        """发送起势预警（含 AI 分析）"""
         score = analysis["score"]
         reasons = "\n".join(analysis["reasons"])
 
@@ -61,7 +61,28 @@ class Notifier:
 
 🔗 [查看视频](https://www.douyin.com/video/{video.get('id', '')})"""
 
-        return self.send_markdown(content)
+        self.send_markdown(content)
+
+        # 如果有 AI 分析结果，单独发一条
+        if ai_result and ai_result.get("explosion_point"):
+            ideas = "\n".join([f"> {i+1}. {idea}" for i, idea in enumerate(ai_result.get("content_ideas", [])[:3])])
+
+            ai_content = f"""🧠 **AI 爆点分析**
+
+🎯 **为什么火:**
+{ai_result.get('explosion_point', '')}
+
+{f"💬 **评论区洞察:**\n{ai_result.get('comment_insight', '')}" if ai_result.get('comment_insight') else ""}
+
+🔗 **手工赛道怎么蹭:**
+{ai_result.get('handcraft_angle', '')}
+
+📝 **选题建议:**
+{ideas}"""
+
+            return self.send_markdown(ai_content)
+
+        return True
 
     def send_daily_report(self, trending_videos: list, hot_topics: list) -> bool:
         """发送每日汇总报告"""

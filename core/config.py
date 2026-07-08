@@ -16,6 +16,11 @@ class Config:
     WECOM_USER_ID = os.getenv("WECOM_USER_ID", "XuXingXin")
     WECOM_WEBHOOK_URL = os.getenv("WECOM_WEBHOOK_URL", "")
 
+    # AI 分析
+    AI_GATEWAY_URL = os.getenv("AI_GATEWAY_URL", "https://ai-gateway-code-in.hszq8.com")
+    AI_GATEWAY_KEY = os.getenv("AI_GATEWAY_KEY", "")
+    AI_MODEL = os.getenv("AI_MODEL", "claude-haiku-4-5")
+
     # 抖音
     DOUYIN_COOKIE = os.getenv("DOUYIN_COOKIE", "")
 

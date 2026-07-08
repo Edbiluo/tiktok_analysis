@@ -13,6 +13,8 @@ from core.douyin import DouyinClient
 from core.database import init_db, save_author, save_video, save_snapshot, get_author_avg_stats
 from core.analyzer import TrendingAnalyzer
 from core.notifier import Notifier
+from core.ai_analyzer import AIAnalyzer
+from core.config import Config
 
 
 def collect_user_videos(client: DouyinClient, conn, sec_user_id: str) -> list:
@@ -172,12 +174,29 @@ def run_collection(hot_only: bool = False, notify: bool = True):
                     new_alerts.append(item)
 
             if new_alerts:
+                # AI 分析（只分析前 3 条，省 token）
+                ai = None
+                if Config.AI_GATEWAY_KEY:
+                    ai = AIAnalyzer()
+                    print(f"  🧠 AI 分析 {min(len(new_alerts), 3)} 条起势视频...")
+
                 print(f"  📤 发送 {len(new_alerts)} 条新预警...")
-                for item in new_alerts[:5]:  # 单次最多推 5 条
-                    notifier.send_trending_alert(item["video"], item["analysis"])
+                for item in new_alerts[:5]:
+                    ai_result = None
+                    if ai and new_alerts.index(item) < 3:
+                        try:
+                            ai_result = ai.analyze_trending_video(item["video"])
+                            print(f"     AI 分析完成: {item['video'].get('title', '')[:20]}")
+                        except Exception as e:
+                            print(f"     AI 分析失败: {e}")
+
+                    notifier.send_trending_alert(item["video"], item["analysis"], ai_result)
                     save_alert(conn, item["video"]["id"], "trending",
                                item["analysis"]["score"], item["video"].get("title", ""))
                     time.sleep(1)
+
+                if ai:
+                    ai.close()
                 print("     ✅ 通知已发送")
             else:
                 print("  ℹ️  起势视频均已推送过，无新增")
