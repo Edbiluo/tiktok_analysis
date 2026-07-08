@@ -1,5 +1,6 @@
 """抖音热点雷达 - 通知模块（企微群机器人 Webhook）"""
 
+import ssl
 import httpx
 from core.config import Config
 
@@ -9,7 +10,10 @@ class Notifier:
 
     def __init__(self):
         self.webhook_url = Config.WECOM_WEBHOOK_URL
-        self._client = httpx.Client(verify=False, timeout=15)
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        self._client = httpx.Client(verify=ctx, timeout=15, trust_env=True)
 
     def _send(self, payload: dict) -> bool:
         """发送消息到群机器人"""

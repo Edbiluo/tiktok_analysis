@@ -1,5 +1,7 @@
 """抖音热点雷达 - AI 爆点分析模块"""
 
+import os
+import ssl
 import httpx
 from core.config import Config
 
@@ -11,7 +13,11 @@ class AIAnalyzer:
         self.api_url = Config.AI_GATEWAY_URL
         self.api_key = Config.AI_GATEWAY_KEY
         self.model = Config.AI_MODEL
-        self._client = httpx.Client(verify=False, timeout=60)
+        # 创建不验证 SSL 的上下文 + 信任环境代理
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        self._client = httpx.Client(verify=ctx, timeout=60, trust_env=True)
 
     def analyze_trending_video(self, video: dict, hot_comments: list = None) -> dict:
         """
