@@ -97,6 +97,8 @@ class AIAnalyzer:
 
     def _parse_response(self, text: str) -> dict:
         """解析 AI 回复，提取各部分"""
+        import re
+
         result = {
             "explosion_point": "",
             "comment_insight": "",
@@ -105,24 +107,34 @@ class AIAnalyzer:
             "raw_response": text,
         }
 
-        sections = text.split("###")
+        # 按 ## 或 ### 分割（兼容不同模型的输出格式）
+        sections = re.split(r'#{2,4}\s*', text)
         for section in sections:
             section = section.strip()
-            lower = section.lower()
-            content = "\n".join(section.split("\n")[1:]).strip()
+            if not section:
+                continue
 
-            if "爆点" in section[:20]:
+            # 取标题行（第一行）和内容（后续行）
+            lines = section.split("\n")
+            header = lines[0].strip().replace("*", "").replace("#", "").strip()
+            content = "\n".join(lines[1:]).strip()
+            # 去掉分割线
+            content = re.sub(r'\n---+\n?', '\n', content).strip()
+
+            if "爆点" in header:
                 result["explosion_point"] = content
-            elif "评论" in section[:20]:
+            elif "评论" in header or "洞察" in header:
                 result["comment_insight"] = content
-            elif "蹭" in section[:20] or "手工" in section[:20]:
+            elif "蹭" in header or "手工" in header or "关联" in header:
                 result["handcraft_angle"] = content
-            elif "选题" in section[:20]:
+            elif "选题" in header or "建议" in header:
                 result["content_ideas"] = [
-                    line.strip().lstrip("0123456789.、- ")
+                    re.sub(r'^[\d.、\-\*\s]+', '', line).strip()
                     for line in content.split("\n")
-                    if line.strip() and len(line.strip()) > 5
-                ]
+                    if line.strip() and len(line.strip()) > 8
+                    and not line.strip().startswith("---")
+                    and not line.strip().startswith("运营")
+                ][:5]
 
         return result
 
