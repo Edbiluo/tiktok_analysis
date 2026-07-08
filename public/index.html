@@ -408,12 +408,12 @@
             container.innerHTML = `
                 <div style="margin-bottom:16px">
                     <div style="display:flex;gap:8px;margin-bottom:12px">
-                        <input type="text" id="input-sec-uid" placeholder="抖音主页链接或 sec_uid"
-                            style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:14px;">
-                        <button class="btn btn-primary" onclick="addAuthor()">添加</button>
+                        <textarea id="input-sec-uid" rows="3" placeholder="粘贴抖音主页链接，支持多个（每行一个）"
+                            style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:14px;resize:vertical;font-family:inherit;"></textarea>
+                        <button class="btn btn-primary" onclick="addAuthor()" id="btn-add-author" style="align-self:flex-end;height:40px;">添加</button>
                     </div>
                     <p style="font-size:12px;color:var(--text-secondary)">
-                        💡 打开抖音网页版 → 进入博主主页 → 复制地址栏链接粘贴到这里
+                        💡 打开抖音网页版 → 进入博主主页 → 复制地址栏链接粘贴到这里（支持批量，每行一个）
                     </p>
                 </div>
                 <div id="author-list" class="video-list">
@@ -455,25 +455,29 @@
             let value = input.value.trim();
             if (!value) return;
 
-            // 尝试从 URL 提取 sec_uid
-            const match = value.match(/user\/([^\/?]+)/);
-            const secUid = match ? match[1] : value;
+            const btn = document.getElementById('btn-add-author');
+            btn.disabled = true;
+            btn.textContent = '添加中...';
 
             try {
                 const resp = await fetch('/api/settings', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ action: 'add_author', sec_uid: secUid, nickname: '' }),
+                    body: JSON.stringify({ action: 'add_author', sec_uid: value }),
                 });
                 const result = await resp.json();
                 if (result.ok) {
                     input.value = '';
+                    alert('✅ ' + result.message);
                     loadAuthors();
                 } else {
                     alert('添加失败: ' + result.error);
                 }
             } catch (e) {
                 alert('网络错误');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '添加';
             }
         }
 

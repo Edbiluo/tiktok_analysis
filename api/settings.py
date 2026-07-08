@@ -1,12 +1,39 @@
 """API - 设置管理（Cookie 更新、账号管理）"""
 
 import json
+import re
 import sys
 import os
 from http.server import BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.database import init_db
+
+
+def extract_sec_uid(text):
+    """从各种格式的输入中提取 sec_uid"""
+    text = text.strip()
+    # 匹配 https://www.douyin.com/user/xxx 格式
+    match = re.search(r'user/([A-Za-z0-9_-]+)', text)
+    if match:
+        return match.group(1)
+    # 如果本身就是 sec_uid（一般是 MS4w 开头的长字符串）
+    if len(text) > 20 and not text.startswith('http'):
+        return text
+    return text
+
+
+def fetch_user_info(sec_uid, cookie):
+    """用抖音 API 获取用户基本信息"""
+    try:
+        from core.douyin import DouyinClient
+        client = DouyinClient(cookie=cookie)
+        info = client.get_user_info(sec_uid)
+        client.close()
+        return info
+    except Exception as e:
+        print(f"[WARN] 获取用户信息失败: {e}")
+        return None
 
 
 class handler(BaseHTTPRequestHandler):
@@ -94,22 +121,67 @@ class handler(BaseHTTPRequestHandler):
                 message = "Cookie 已更新"
 
             elif action == "add_author":
-                # 手动添加监控账号
-                sec_uid = body.get("sec_uid", "").strip()
-                nickname = body.get("nickname", "").strip()
-                if not sec_uid:
-                    raise ValueError("sec_uid 不能为空")
+                # 添加监控账号（支持批量，换行分隔）
+                raw_input = body.get("sec_uid", "").strip()
+                if not raw_input:
+                    raise ValueError("请输入抖音主页链接或 sec_uid")
 
-                conn.execute("""
-                    INSERT INTO authors (id, nickname, is_monitored, created_at, updated_at)
-                    VALUES (?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    ON CONFLICT(id) DO UPDATE SET
-                        nickname = COALESCE(excluded.nickname, nickname),
-                        is_monitored = 1,
-                        updated_at = CURRENT_TIMESTAMP
-                """, (sec_uid, nickname or "未命名"))
+                # 支持换行、逗号、空格分隔的多个链接
+                items = re.split(r'[\n,]+', raw_input)
+                items = [item.strip() for item in items if item.strip()]
+
+                if not items:
+                    raise ValueError("未识别到有效链接")
+
+                # 获取 Cookie（用于拉取用户信息）
+                cursor = conn.execute("SELECT value FROM settings WHERE key = 'douyin_cookie'")
+                row = cursor.fetchone()
+                cookie = row[0] if row else ""
+
+                added = []
+                failed = []
+
+                for item in items:
+                    sec_uid = extract_sec_uid(item)
+                    if not sec_uid:
+                        failed.append(item)
+                        continue
+
+                    # 尝试获取用户信息
+                    nickname = ""
+                    follower_count = 0
+                    avatar_url = ""
+                    video_count = 0
+
+                    if cookie:
+                        info = fetch_user_info(sec_uid, cookie)
+                        if info:
+                            nickname = info.get("nickname", "")
+                            follower_count = info.get("follower_count", 0)
+                            avatar_url = info.get("avatar_url", "")
+                            video_count = info.get("video_count", 0)
+
+                    conn.execute("""
+                        INSERT INTO authors (id, nickname, avatar_url, follower_count, video_count, is_monitored, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        ON CONFLICT(id) DO UPDATE SET
+                            nickname = CASE WHEN excluded.nickname != '' THEN excluded.nickname ELSE authors.nickname END,
+                            avatar_url = CASE WHEN excluded.avatar_url != '' THEN excluded.avatar_url ELSE authors.avatar_url END,
+                            follower_count = CASE WHEN excluded.follower_count > 0 THEN excluded.follower_count ELSE authors.follower_count END,
+                            video_count = CASE WHEN excluded.video_count > 0 THEN excluded.video_count ELSE authors.video_count END,
+                            is_monitored = 1,
+                            updated_at = CURRENT_TIMESTAMP
+                    """, (sec_uid, nickname, avatar_url, follower_count, video_count))
+                    added.append(nickname or sec_uid[:20])
+
                 conn.commit()
-                message = f"已添加: {nickname or sec_uid}"
+
+                if added and not failed:
+                    message = f"已添加 {len(added)} 个账号: {', '.join(added)}"
+                elif added and failed:
+                    message = f"已添加 {len(added)} 个，{len(failed)} 个失败"
+                else:
+                    raise ValueError("全部添加失败，请检查链接格式")
 
             elif action == "remove_author":
                 # 移除监控账号
