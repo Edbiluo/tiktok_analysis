@@ -168,18 +168,27 @@ def run_collection(hot_only: bool = False, notify: bool = True):
                 print("  ℹ️  最近 1 小时已分析过热搜，跳过")
 
         if not hot_only:
-            # Cookie 有效性检测
-            check_cookie_valid(client, conn, notifier)
+            # 同行采集降频：检查最近 2 小时是否已采集过
+            cursor = conn.execute("""
+                SELECT COUNT(*) FROM video_snapshots
+                WHERE snapshot_at > datetime('now', '-2 hours')
+            """)
+            recent_snapshots = cursor.fetchone()[0]
 
-            # 获取监控列表
-            cursor = conn.execute("SELECT id, nickname FROM authors WHERE is_monitored = 1")
-            authors = cursor.fetchall()
+            if recent_snapshots > 10:
+                print("  ℹ️  最近 2 小时已采集过同行，跳过")
+            else:
+                # Cookie 有效性检测
+                check_cookie_valid(client, conn, notifier)
 
-            if not authors:
-                print("  ⚠️  监控列表为空，请先导入关注账号")
-                return
+                # 获取监控列表
+                cursor = conn.execute("SELECT id, nickname FROM authors WHERE is_monitored = 1")
+                authors = cursor.fetchall()
 
-            print(f"  👥 采集 {len(authors)} 个同行账号...")
+                if not authors:
+                    print("  ⚠️  监控列表为空，请先导入关注账号")
+                else:
+                    print(f"  👥 采集 {len(authors)} 个同行账号...")
             for i, (sec_uid, nickname) in enumerate(authors, 1):
                 print(f"     [{i}/{len(authors)}] {nickname}...")
                 videos = collect_user_videos(client, conn, sec_uid)
@@ -192,9 +201,15 @@ def run_collection(hot_only: bool = False, notify: bool = True):
         print("  🧠 分析起势视频...")
         results = analyze_videos(conn, all_videos)
         trending = [r for r in results if r["analysis"]["is_trending"]]
-        print(f"     发现 {len(trending)} 条起势视频")
 
-        # 通知（防重复：只推没推过的）
+        # 按等级分组
+        explosive = [r for r in trending if r["analysis"]["level"] == "explosive"]
+        rising = [r for r in trending if r["analysis"]["level"] == "trending"]
+        potential = [r for r in trending if r["analysis"]["level"] == "potential"]
+
+        print(f"     🔥🔥🔥 爆款: {len(explosive)} | 🔥🔥 起势: {len(rising)} | 🔥 潜力: {len(potential)}")
+
+        # 通知（防重复）
         if notify and trending:
             new_alerts = []
             for item in trending:
@@ -203,16 +218,17 @@ def run_collection(hot_only: bool = False, notify: bool = True):
                     new_alerts.append(item)
 
             if new_alerts:
-                # AI 分析（只分析前 3 条，省 token）
                 ai = None
                 if Config.AI_GATEWAY_KEY:
                     ai = AIAnalyzer()
-                    print(f"  🧠 AI 分析 {min(len(new_alerts), 3)} 条起势视频...")
 
                 print(f"  📤 发送 {len(new_alerts)} 条新预警...")
-                for item in new_alerts[:5]:
+                for item in new_alerts[:8]:
+                    level = item["analysis"]["level"]
                     ai_result = None
-                    if ai and new_alerts.index(item) < 3:
+
+                    # 只对爆款和起势做 AI 分析（省 token）
+                    if ai and level in ("explosive", "trending"):
                         try:
                             ai_result = ai.analyze_trending_video(item["video"])
                             print(f"     AI 分析完成: {item['video'].get('title', '')[:20]}")
@@ -220,7 +236,7 @@ def run_collection(hot_only: bool = False, notify: bool = True):
                             print(f"     AI 分析失败: {e}")
 
                     notifier.send_trending_alert(item["video"], item["analysis"], ai_result)
-                    save_alert(conn, item["video"]["id"], "trending",
+                    save_alert(conn, item["video"]["id"], level,
                                item["analysis"]["score"], item["video"].get("title", ""))
                     time.sleep(1)
 

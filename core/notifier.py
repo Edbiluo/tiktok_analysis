@@ -40,10 +40,13 @@ class Notifier:
     def send_trending_alert(self, video: dict, analysis: dict, ai_result: dict = None) -> bool:
         """发送起势预警 + AI 分析"""
         score = analysis["score"]
+        level = analysis.get("level", "trending")
         reasons = "\n".join(analysis["reasons"])
 
+        level_tag = {"explosive": "🔥🔥🔥 爆款", "trending": "🔥🔥 起势", "potential": "🔥 有潜力"}.get(level, "🔥")
+
         # 第一条：数据
-        content = f"""🔥 <font color="warning">起势预警</font> ({score}分)
+        content = f"""{level_tag} <font color="warning">({score}分)</font>
 
 **{video.get('title', '无标题')}**
 @{video.get('author_name', '未知')}

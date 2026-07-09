@@ -33,6 +33,8 @@ class AIAnalyzer:
                 "temperature": 0.7,
             },
         )
+        if resp.status_code != 200:
+            raise Exception(f"AI API 返回 {resp.status_code}: {resp.text[:200]}")
         data = resp.json()
         return data["choices"][0]["message"]["content"]
 

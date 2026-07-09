@@ -44,14 +44,23 @@ class TrendingAnalyzer:
             self.weights["breakthrough"] * breakthrough_score
         )
 
-        # 判断是否起势
-        is_trending = total_score >= self.threshold * 20  # 阈值转换为百分制
+        # 判断等级
+        level = "none"
+        if total_score >= 80:
+            level = "explosive"   # 🔥🔥🔥 爆款
+        elif total_score >= 50:
+            level = "trending"    # 🔥🔥 起势
+        elif total_score >= 30:
+            level = "potential"   # 🔥 有潜力
+
+        is_trending = level != "none"
 
         # 生成原因说明
         reasons = self._generate_reasons(video, growth_score, interaction_score, breakthrough_score, author_stats)
 
         return {
             "score": round(total_score, 1),
+            "level": level,
             "is_trending": is_trending,
             "growth_score": round(growth_score, 1),
             "interaction_score": round(interaction_score, 1),
