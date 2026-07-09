@@ -7,18 +7,52 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: 测试 office 网关 + gemini
+      - name: 列出 office 网关可用模型
         run: |
+          echo "=== office-in 模型列表 ==="
+          curl -s "https://ai-gateway-office-in.hszq8.com/v1/models" \
+            -H "Authorization: Bearer ${{ secrets.AI_GATEWAY_KEY }}" \
+            | python3 -c "
+          import sys,json
+          try:
+            data=json.loads(sys.stdin.read())
+            for m in sorted(data.get('data',[]), key=lambda x:x['id']):
+              print(f'  {m[\"id\"]}')
+            print(f'共 {len(data.get(\"data\",[]))} 个模型')
+          except Exception as e:
+            print(f'解析失败: {e}')
+          " || echo "❌ office 网关不可达"
+
+      - name: 列出 code 网关可用模型
+        run: |
+          echo "=== code-in 模型列表 ==="
+          curl -s "https://ai-gateway-code-in.hszq8.com/v1/models" \
+            -H "Authorization: Bearer ${{ secrets.AI_GATEWAY_KEY }}" \
+            | python3 -c "
+          import sys,json
+          try:
+            data=json.loads(sys.stdin.read())
+            for m in sorted(data.get('data',[]), key=lambda x:x['id']):
+              print(f'  {m[\"id\"]}')
+            print(f'共 {len(data.get(\"data\",[]))} 个模型')
+          except Exception as e:
+            print(f'解析失败: {e}')
+          " || echo "❌ code 网关不可达"
+
+      - name: 测试 office 网关调用
+        run: |
+          echo "=== 测试 office-in gemini-3-flash ==="
           curl -s "https://ai-gateway-office-in.hszq8.com/v1/chat/completions" \
             -H "Authorization: Bearer ${{ secrets.AI_GATEWAY_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"model":"gemini-3-flash","messages":[{"role":"user","content":"说ok"}],"max_tokens":10}' \
-            && echo "✅ office 网关可达" || echo "❌ office 网关不可达"
+            && echo -e "\n✅ office gemini OK" || echo "❌ 失败"
 
-      - name: 测试 code 网关 + claude
+      - name: 测试 code 网关调用
         run: |
+          echo "=== 测试 code-in claude-sonnet-4-6 ==="
           curl -s "https://ai-gateway-code-in.hszq8.com/v1/chat/completions" \
             -H "Authorization: Bearer ${{ secrets.AI_GATEWAY_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"model":"claude-haiku-4-5","messages":[{"role":"user","content":"说ok"}],"max_tokens":10}' \
-            && echo "✅ code 网关可达" || echo "❌ code 网关不可达"
+            -d '{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"说ok"}],"max_tokens":10}' \
+            && echo -e "\n✅ code claude OK" || echo "❌ 失败"
