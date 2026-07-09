@@ -1,140 +1,161 @@
-"""抖音热点雷达 - AI 爆点分析模块"""
+"""抖音热点雷达 - AI 分析模块（说人话版）"""
 
-import os
+import re
 import ssl
 import httpx
 from core.config import Config
 
 
 class AIAnalyzer:
-    """用 LLM 分析视频爆点并给出手工赛道蹭热度建议"""
+    """用 AI 分析热点，给出接地气的蹭热度建议"""
 
     def __init__(self):
         self.api_url = Config.AI_GATEWAY_URL
         self.api_key = Config.AI_GATEWAY_KEY
         self.model = Config.AI_MODEL
-        # 创建不验证 SSL 的上下文 + 信任环境代理
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         self._client = httpx.Client(verify=ctx, timeout=60, trust_env=True)
 
-    def analyze_trending_video(self, video: dict, hot_comments: list = None) -> dict:
-        """
-        分析一条起势视频的爆点 + 给出手工赛道蹭热度建议
+    def _call_ai(self, prompt: str, max_tokens: int = 800) -> str:
+        """调用 AI 接口"""
+        resp = self._client.post(
+            f"{self.api_url}/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+                "temperature": 0.7,
+            },
+        )
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
 
-        Returns:
-            {
-                "explosion_point": "爆点分析...",
-                "comment_insight": "评论区洞察...",
-                "handcraft_angle": "手工赛道关联建议...",
-                "content_ideas": ["具体选题1", "具体选题2", ...],
-                "raw_response": "完整AI回复",
-            }
-        """
+    # ========== 起势视频分析 ==========
+
+    def analyze_trending_video(self, video: dict, hot_comments: list = None) -> dict:
+        """分析一条起势视频，说人话"""
         comments_text = ""
         if hot_comments:
-            top_comments = hot_comments[:15]
-            comments_text = "\n".join([f"- {c}" for c in top_comments])
+            comments_text = "\n".join([f"- {c}" for c in hot_comments[:15]])
 
-        prompt = f"""你是一个抖音内容运营专家，同时熟悉手工类赛道（风琴本、尼泊尔手工艺品、手账本、手作）。
+        prompt = f"""我女朋友是抖音手工博主（做风琴本、尼泊尔手工本、手账），我在帮她盯热点。
 
-现在有一条抖音视频正在起势（数据增长异常快），请分析：
+现在这条视频在抖音上涨得很快：
+标题：{video.get('title', '')}
+作者：{video.get('author_name', '')}
+点赞{video.get('like_count', 0)} 评论{video.get('comment_count', 0)} 收藏{video.get('collect_count', 0)} 分享{video.get('share_count', 0)}
+{f"热门评论：\n{comments_text}" if comments_text else ""}
 
-## 视频信息
-- 标题：{video.get('title', '无标题')}
-- 作者：{video.get('author_name', '未知')}
-- 播放：{video.get('play_count', 0)}
-- 点赞：{video.get('like_count', 0)}
-- 评论：{video.get('comment_count', 0)}
-- 收藏：{video.get('collect_count', 0)}
-- 分享：{video.get('share_count', 0)}
+用大白话帮我分析，别用"赋能""矩阵""打法"这种词，像朋友聊天一样：
 
-{"## 热门评论" + chr(10) + comments_text if comments_text else ""}
-
-请按以下格式回答（每部分 2-3 句话，简洁有力）：
-
-### 1. 爆点分析
-这条视频为什么火？核心吸引力是什么？（从选题、情绪、形式、节奏等角度）
-
-### 2. 评论区洞察
-{"评论区在讨论什么？用户的关注点和情绪是什么？" if comments_text else "（无评论数据，跳过）"}
-
-### 3. 手工赛道怎么蹭
-作为风琴本/尼泊尔手工赛道的博主，如何借这个热点做内容？给出具体的关联角度。
-
-### 4. 具体选题建议
-给出 3 个可以直接拍的视频选题（标题+简要内容描述），要能蹭到这个热点又和手工相关。"""
+【这条火在哪】一两句话说清楚（什么内容，为什么吸引人）
+【评论在聊啥】{f"总结评论区大家关心什么" if comments_text else "跳过"}
+【怎么蹭】我女朋友做风琴本/尼泊尔手工的，具体怎么关联这个热点拍一条，说清楚拍什么
+【视频标题】给3个能直接用的标题"""
 
         try:
-            resp = self._client.post(
-                f"{self.api_url}/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 1000,
-                    "temperature": 0.7,
-                },
-            )
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-
-            return self._parse_response(content)
-
+            text = self._call_ai(prompt, max_tokens=600)
+            return self._parse_video_analysis(text)
         except Exception as e:
             print(f"[ERROR] AI 分析失败: {e}")
-            return {
-                "explosion_point": "AI 分析失败",
-                "comment_insight": "",
-                "handcraft_angle": "",
-                "content_ideas": [],
-                "raw_response": str(e),
-            }
+            return {"what": "", "comments": "", "how": "", "titles": [], "raw": str(e)}
 
-    def _parse_response(self, text: str) -> dict:
-        """解析 AI 回复，提取各部分"""
-        import re
+    def _parse_video_analysis(self, text: str) -> dict:
+        """解析视频分析"""
+        result = {"what": "", "comments": "", "how": "", "titles": [], "raw": text}
 
-        result = {
-            "explosion_point": "",
-            "comment_insight": "",
-            "handcraft_angle": "",
-            "content_ideas": [],
-            "raw_response": text,
-        }
+        sections = re.split(r'【(.+?)】', text)
+        # sections 是 [前文, 标签1, 内容1, 标签2, 内容2, ...]
+        for i in range(1, len(sections) - 1, 2):
+            label = sections[i].strip()
+            content = sections[i + 1].strip()
+            # 去掉 markdown 格式
+            content = re.sub(r'\*+', '', content).strip()
 
-        # 按 ## 或 ### 分割（兼容不同模型的输出格式）
-        sections = re.split(r'#{2,4}\s*', text)
-        for section in sections:
-            section = section.strip()
-            if not section:
+            if "火" in label or "这条" in label:
+                result["what"] = content[:200]
+            elif "评论" in label or "聊" in label:
+                result["comments"] = content[:200]
+            elif "蹭" in label or "怎么" in label:
+                result["how"] = content[:300]
+            elif "标题" in label:
+                result["titles"] = [
+                    re.sub(r'^[\d.、\-\s]+', '', line).strip()
+                    for line in content.split("\n")
+                    if line.strip() and len(line.strip()) > 5
+                ][:3]
+
+        return result
+
+    # ========== 热搜分析 ==========
+
+    def analyze_hot_topics(self, topics: list) -> dict:
+        """分析热搜，找能蹭的"""
+        topics_text = "\n".join([f"{i+1}. {t.get('title', '')}" for i, t in enumerate(topics[:25])])
+
+        prompt = f"""我女朋友是抖音手工博主（做风琴本、尼泊尔手工本、手账），我在帮她盯热点。
+
+这是现在的抖音热搜：
+{topics_text}
+
+帮我挑出 2-3 个最能和"手工/手账/风琴本/手作"关联的热点。
+
+要求：
+- 不是所有热搜都能蹭，挑不出来就说"今天没啥能蹭的"
+- 情绪类（治愈、解压、浪漫）和生活方式类最容易关联
+- 用大白话说，像朋友微信聊天
+
+每个热点这样写：
+【热搜】xxx
+【怎么关联】一句话说清楚
+【拍什么】具体拍什么内容，说清楚
+【标题】一个能直接用的视频标题
+---"""
+
+        try:
+            text = self._call_ai(prompt, max_tokens=800)
+            return self._parse_hot_analysis(text)
+        except Exception as e:
+            print(f"[ERROR] 热搜分析失败: {e}")
+            return {"opportunities": [], "raw": str(e)}
+
+    def _parse_hot_analysis(self, text: str) -> dict:
+        """解析热搜分析"""
+        result = {"opportunities": [], "raw": text}
+
+        # 检查是否"没啥能蹭的"
+        if "没啥能蹭" in text or "没有合适" in text:
+            return result
+
+        blocks = re.split(r'---+', text)
+        for block in blocks:
+            block = block.strip()
+            if not block:
                 continue
 
-            # 取标题行（第一行）和内容（后续行）
-            lines = section.split("\n")
-            header = lines[0].strip().replace("*", "").replace("#", "").strip()
-            content = "\n".join(lines[1:]).strip()
-            # 去掉分割线
-            content = re.sub(r'\n---+\n?', '\n', content).strip()
+            opp = {}
+            sections = re.split(r'【(.+?)】', block)
+            for i in range(1, len(sections) - 1, 2):
+                label = sections[i].strip()
+                content = re.sub(r'\*+', '', sections[i + 1]).strip()
 
-            if "爆点" in header:
-                result["explosion_point"] = content
-            elif "评论" in header or "洞察" in header:
-                result["comment_insight"] = content
-            elif "蹭" in header or "手工" in header or "关联" in header:
-                result["handcraft_angle"] = content
-            elif "选题" in header or "建议" in header:
-                result["content_ideas"] = [
-                    re.sub(r'^[\d.、\-\*\s]+', '', line).strip()
-                    for line in content.split("\n")
-                    if line.strip() and len(line.strip()) > 8
-                    and not line.strip().startswith("---")
-                    and not line.strip().startswith("运营")
-                ][:5]
+                if "热搜" in label:
+                    opp["topic"] = content.split("\n")[0].strip()
+                elif "关联" in label:
+                    opp["angle"] = content.split("\n")[0].strip()
+                elif "拍" in label:
+                    opp["shoot"] = content[:150]
+                elif "标题" in label:
+                    opp["title"] = content.split("\n")[0].strip()
+
+            if opp.get("topic"):
+                result["opportunities"].append(opp)
 
         return result
 

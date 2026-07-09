@@ -138,6 +138,35 @@ def run_collection(hot_only: bool = False, notify: bool = True):
         hot_topics = collect_hot_search(client, conn)
         print(f"     获取到 {len(hot_topics)} 条热搜")
 
+        # 热搜 AI 分析（找蹭热度机会）
+        if notify and hot_topics and Config.AI_GATEWAY_KEY:
+            # 防重复：检查最近 1 小时是否已经分析过热搜
+            cursor = conn.execute("""
+                SELECT COUNT(*) FROM alerts
+                WHERE alert_type = 'hot_analysis'
+                AND created_at > datetime('now', '-1 hours')
+            """)
+            recent_hot = cursor.fetchone()[0]
+
+            if recent_hot == 0:
+                print("  🧠 AI 分析热搜蹭热度机会...")
+                try:
+                    ai = AIAnalyzer()
+                    hot_analysis = ai.analyze_hot_topics(hot_topics)
+                    opps = hot_analysis.get("opportunities", [])
+                    if opps:
+                        print(f"     发现 {len(opps)} 个蹭热度机会，推送中...")
+                        notifier.send_hot_opportunities(hot_analysis)
+                        save_alert(conn, "hot_search", "hot_analysis", 0,
+                                   f"热搜分析: {len(opps)} 个机会")
+                    else:
+                        print("     今天没啥能蹭的热点")
+                    ai.close()
+                except Exception as e:
+                    print(f"     热搜 AI 分析失败: {e}")
+            else:
+                print("  ℹ️  最近 1 小时已分析过热搜，跳过")
+
         if not hot_only:
             # Cookie 有效性检测
             check_cookie_valid(client, conn, notifier)
