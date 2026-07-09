@@ -55,9 +55,9 @@ jobs:
           DOUYIN_COOKIE: ${{ secrets.DOUYIN_COOKIE }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-          AI_GATEWAY_URL: ${{ secrets.AI_GATEWAY_URL }}
+          AI_GATEWAY_URL: https://api.deepseek.com
           AI_GATEWAY_KEY: ${{ secrets.AI_GATEWAY_KEY }}
-          AI_MODEL: claude-sonnet-4-6
+          AI_MODEL: deepseek-chat
         run: |
           if [ "${{ steps.mode.outputs.mode }}" = "hot-only" ]; then
             python -m scripts.collect --hot-only
