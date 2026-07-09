@@ -1,4 +1,4 @@
-"""API - 手动触发采集"""
+"""API - 触发采集（支持 GET 和 POST）"""
 
 import json
 import sys
@@ -10,31 +10,32 @@ from scripts.collect import run_collection
 
 
 class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        """cron-job.org 定时触发（GET）"""
+        self._run()
+
     def do_POST(self):
-        """手动触发一次数据采集"""
+        """手动触发（POST）"""
+        self._run()
+
+    def _run(self):
         try:
-            # 读取请求体
-            content_length = int(self.headers.get("Content-Length", 0))
+            # 尝试读 POST body
             body = {}
+            content_length = int(self.headers.get("Content-Length", 0))
             if content_length > 0:
                 body = json.loads(self.rfile.read(content_length))
 
             hot_only = body.get("hot_only", False)
             notify = body.get("notify", True)
 
-            # 执行采集
             run_collection(hot_only=hot_only, notify=notify)
-
-            response = {
-                "ok": True,
-                "message": "采集完成",
-            }
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(json.dumps(response, ensure_ascii=False).encode())
+            self.wfile.write(json.dumps({"ok": True, "message": "采集完成"}, ensure_ascii=False).encode())
 
         except Exception as e:
             self.send_response(500)
@@ -43,9 +44,8 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"ok": False, "error": str(e)}).encode())
 
     def do_OPTIONS(self):
-        """CORS preflight"""
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()

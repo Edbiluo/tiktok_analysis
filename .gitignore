@@ -20,6 +20,7 @@ venv/
 .vscode/
 .idea/
 *.swp
+.firecrawl
 
 # OS
 .DS_Store
