@@ -189,13 +189,13 @@ def run_collection(hot_only: bool = False, notify: bool = True):
                     print("  ⚠️  监控列表为空，请先导入关注账号")
                 else:
                     print(f"  👥 采集 {len(authors)} 个同行账号...")
-            for i, (sec_uid, nickname) in enumerate(authors, 1):
-                print(f"     [{i}/{len(authors)}] {nickname}...")
-                videos = collect_user_videos(client, conn, sec_uid)
-                all_videos.extend(videos)
-                time.sleep(2)  # 避免请求过快
+                    for i, (sec_uid, nickname) in enumerate(authors, 1):
+                        print(f"     [{i}/{len(authors)}] {nickname}...")
+                        videos = collect_user_videos(client, conn, sec_uid)
+                        all_videos.extend(videos)
+                        time.sleep(2)
 
-            print(f"     共采集 {len(all_videos)} 条视频")
+                    print(f"     共采集 {len(all_videos)} 条视频")
 
         # 分析
         print("  🧠 分析起势视频...")
