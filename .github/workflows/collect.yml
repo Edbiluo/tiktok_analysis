@@ -1,13 +1,10 @@
 name: 抖音热点采集
 
 on:
-  schedule:
-    # 白天 8:00-23:00 北京时间（UTC 0:00-15:00），每小时的 0分和45分各跑一次
-    # 相当于约每45分钟一次，每天约 ~21 次 × 3分钟 = 63分钟/天，月耗约 1900 分钟
-    - cron: '0 0-15 * * *'
-    - cron: '45 0-14 * * *'
+  # 定时触发已迁移到 cron-job.org（每45分钟调 GitHub API dispatch）
+  # GitHub Actions cron 不再使用（延迟大、经常跳过）
 
-  # 支持手动触发
+  # cron-job.org 和手动触发都走这个入口
   workflow_dispatch:
     inputs:
       mode:
