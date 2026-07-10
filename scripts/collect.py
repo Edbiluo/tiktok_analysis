@@ -138,17 +138,28 @@ def run_collection(hot_only: bool = False, notify: bool = True):
         hot_topics = collect_hot_search(client, conn)
         print(f"     获取到 {len(hot_topics)} 条热搜")
 
-        # 热搜 AI 分析（找蹭热度机会）
+        # 热搜 AI 分析（按内容去重，避免重复推送相同话题）
         if notify and hot_topics and Config.AI_GATEWAY_KEY:
-            # 防重复：检查最近 1 小时是否已经分析过热搜
+            # 取当前热搜前5的标题，和最近推送过的对比
+            current_top5 = set(t.get('title', '') for t in hot_topics[:5])
             cursor = conn.execute("""
-                SELECT COUNT(*) FROM alerts
+                SELECT message FROM alerts
                 WHERE alert_type = 'hot_analysis'
-                AND created_at > datetime('now', '-1 hours')
+                AND created_at > datetime('now', '-4 hours')
+                ORDER BY created_at DESC LIMIT 1
             """)
-            recent_hot = cursor.fetchone()[0]
+            last_row = cursor.fetchone()
+            last_topics = last_row[0] if last_row else ""
 
-            if recent_hot == 0:
+            # 如果前5热搜有变化（至少2个新的），才重新分析
+            if last_topics:
+                old_set = set(last_topics.split("|"))
+                new_count = len(current_top5 - old_set)
+                should_analyze = new_count >= 2
+            else:
+                should_analyze = True
+
+            if should_analyze:
                 print("  🧠 AI 分析热搜蹭热度机会...")
                 try:
                     ai = AIAnalyzer()
@@ -157,10 +168,11 @@ def run_collection(hot_only: bool = False, notify: bool = True):
                     if opps:
                         print(f"     发现 {len(opps)} 个蹭热度机会，推送中...")
                         notifier.send_hot_opportunities(hot_analysis)
-                        save_alert(conn, "hot_search", "hot_analysis", 0,
-                                   f"热搜分析: {len(opps)} 个机会")
                     else:
-                        print("     今天没啥能蹭的热点")
+                        print("     今天热搜没有能自然关联手工的")
+                    # 保存本次分析的热搜词（用于下次去重）
+                    save_alert(conn, "hot_search", "hot_analysis", 0,
+                               "|".join(current_top5))
                     ai.close()
                 except Exception as e:
                     print(f"     热搜 AI 分析失败: {e}")
@@ -245,6 +257,43 @@ def run_collection(hot_only: bool = False, notify: bool = True):
                 print("     ✅ 通知已发送")
             else:
                 print("  ℹ️  起势视频均已推送过，无新增")
+
+        # 同行 TOP 视频推送（每天推一次，近半月表现最好的）
+        if notify and not hot_only:
+            cursor = conn.execute("""
+                SELECT COUNT(*) FROM alerts
+                WHERE alert_type = 'peer_top'
+                AND created_at > datetime('now', '-24 hours')
+            """)
+            already_sent_top = cursor.fetchone()[0]
+
+            if already_sent_top == 0:
+                print("  📊 生成同行 TOP 视频...")
+                cursor = conn.execute("""
+                    SELECT v.id, v.title, v.author_id, v.created_at,
+                           a.nickname as author_name,
+                           vs.like_count, vs.comment_count, vs.collect_count, vs.share_count, vs.play_count
+                    FROM videos v
+                    JOIN authors a ON v.author_id = a.id
+                    JOIN video_snapshots vs ON v.id = vs.video_id
+                    WHERE a.is_monitored = 1
+                    AND v.created_at > strftime('%s', 'now', '-15 days')
+                    AND vs.id IN (SELECT MAX(id) FROM video_snapshots GROUP BY video_id)
+                    ORDER BY vs.like_count DESC
+                    LIMIT 5
+                """)
+                top_rows = cursor.fetchall()
+                if top_rows:
+                    top_videos = [{
+                        "id": r[0], "title": r[1], "author_id": r[2], "created_at": r[3],
+                        "author_name": r[4], "like_count": r[5], "comment_count": r[6],
+                        "collect_count": r[7], "share_count": r[8], "play_count": r[9],
+                    } for r in top_rows]
+                    notifier.send_peer_top_videos(top_videos)
+                    save_alert(conn, "peer_top", "peer_top", 0, "同行TOP5推送")
+                    print(f"     推送了 {len(top_videos)} 条同行热门视频")
+                else:
+                    print("     暂无近半月同行视频数据")
 
         # 输出报告
         print("\n" + "=" * 50)

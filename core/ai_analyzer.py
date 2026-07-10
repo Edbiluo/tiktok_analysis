@@ -98,7 +98,7 @@ class AIAnalyzer:
     # ========== 热搜分析 ==========
 
     def analyze_hot_topics(self, topics: list) -> dict:
-        """分析热搜，找能蹭的"""
+        """分析热搜，找能蹭的（严格筛选，不硬蹭）"""
         topics_text = "\n".join([f"{i+1}. {t.get('title', '')}" for i, t in enumerate(topics[:25])])
 
         prompt = f"""我女朋友是抖音手工博主（做风琴本、尼泊尔手工本、手账），我在帮她盯热点。
@@ -106,22 +106,35 @@ class AIAnalyzer:
 这是现在的抖音热搜：
 {topics_text}
 
-帮我挑出 2-3 个最能和"手工/手账/风琴本/手作"关联的热点。
+严格筛选规则（必须遵守）：
+1. 只挑和"手工制作/手账/本子/纸艺/美学/视觉风格"有天然关联的热搜
+2. "天然关联"的意思是：普通观众看到视频标题就觉得合理，而不是"硬拉关系"
+3. 灾难新闻、政治、体育比赛、明星八卦 → 绝对不蹭
+4. 如果只是把猫/美食/旅行"放在手工本旁边"就算关联 → 这是硬蹭，不算
+5. 真的找不到就直接说"今天热搜没有能自然关联手工的"
 
-要求：
-- 不是所有热搜都能蹭，挑不出来就说"今天没啥能蹭的"
-- 情绪类（治愈、解压、浪漫）和生活方式类最容易关联
-- 用大白话说，像朋友微信聊天
+能蹭的例子：
+- "万物皆可波点风" → 做波点主题手账本（风格天然匹配）
+- "新中式穿搭" → 做新中式风格手工本（美学相通）
+- 某个治愈/解压类话题 → 手工制作过程本身就是治愈内容
 
-每个热点这样写：
+不能蹭的例子：
+- "台风来了" → 不可能关联
+- "猫咪搞笑" → 把猫放本子旁边是硬蹭
+- "某明星恋爱" → 强行写情侣手账是硬蹭
+
+如果找到了（最多2个），每个这样写：
 【热搜】xxx
-【怎么关联】一句话说清楚
-【拍什么】具体拍什么内容，说清楚
-【标题】一个能直接用的视频标题
----"""
+【为什么能蹭】一句话，说清楚这个热搜和手工的天然关联点
+【拍什么】具体内容，2-3句话
+【标题】一个视频标题
+---
+
+如果找不到，只写一行：
+今天热搜没有能自然关联手工的"""
 
         try:
-            text = self._call_ai(prompt, max_tokens=800)
+            text = self._call_ai(prompt, max_tokens=600)
             return self._parse_hot_analysis(text)
         except Exception as e:
             print(f"[ERROR] 热搜分析失败: {e}")
@@ -132,7 +145,7 @@ class AIAnalyzer:
         result = {"opportunities": [], "raw": text}
 
         # 检查是否"没啥能蹭的"
-        if "没啥能蹭" in text or "没有合适" in text:
+        if "没有能自然关联" in text or "没啥能蹭" in text or "没有合适" in text:
             return result
 
         blocks = re.split(r'---+', text)
@@ -149,7 +162,7 @@ class AIAnalyzer:
 
                 if "热搜" in label:
                     opp["topic"] = content.split("\n")[0].strip()
-                elif "关联" in label:
+                elif "关联" in label or "为什么" in label or "能蹭" in label:
                     opp["angle"] = content.split("\n")[0].strip()
                 elif "拍" in label:
                     opp["shoot"] = content[:150]

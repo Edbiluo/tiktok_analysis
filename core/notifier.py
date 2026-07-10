@@ -84,15 +84,40 @@ class Notifier:
             return False
 
         sections = []
-        for i, opp in enumerate(opportunities[:3], 1):
-            section = f"""{i}. 🔍 **{opp.get('topic', '')}**
-> {opp.get('angle', '')}
+        for i, opp in enumerate(opportunities[:2], 1):
+            topic = opp.get('topic', '')
+            # 生成抖音搜索链接
+            import urllib.parse
+            search_url = f"https://www.douyin.com/search/{urllib.parse.quote(topic)}"
+
+            section = f"""{i}. 🔍 **{topic}**
+> 为什么能蹭: {opp.get('angle', '')}
 > 拍什么: {opp.get('shoot', '')}
 > 标题: {opp.get('title', '')}
+> 🔗 [看看抖音上这个话题]({search_url})
 """
             sections.append(section)
 
         content = f"""📈 <font color="info">热搜蹭热度机会</font>
+
+{"".join(sections)}"""
+
+        return self.send_markdown(content)
+
+    def send_peer_top_videos(self, top_videos: list) -> bool:
+        """推送同行近期表现最好的视频"""
+        if not top_videos:
+            return False
+
+        sections = []
+        for i, v in enumerate(top_videos[:5], 1):
+            section = f"""{i}. **{v.get('title', '无标题')[:25]}**
+> @{v.get('author_name', '')} | 赞 {self._fmt(v.get('like_count', 0))} | 评 {self._fmt(v.get('comment_count', 0))} | 藏 {self._fmt(v.get('collect_count', 0))}
+> 🔗 [查看](https://www.douyin.com/video/{v.get('id', '')})
+"""
+            sections.append(section)
+
+        content = f"""👥 <font color="info">同行近期热门作品 TOP5</font>
 
 {"".join(sections)}"""
 
