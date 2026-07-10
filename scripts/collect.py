@@ -138,24 +138,23 @@ def run_collection(hot_only: bool = False, notify: bool = True):
         hot_topics = collect_hot_search(client, conn)
         print(f"     获取到 {len(hot_topics)} 条热搜")
 
-        # 热搜 AI 分析（按内容去重，避免重复推送相同话题）
+        # 热搜 AI 分析（核心高频功能，每次热搜有变化就分析）
         if notify and hot_topics and Config.AI_GATEWAY_KEY:
-            # 取当前热搜前5的标题，和最近推送过的对比
-            current_top5 = set(t.get('title', '') for t in hot_topics[:5])
+            # 取当前热搜前10的标题，和上次对比
+            current_top = set(t.get('title', '') for t in hot_topics[:10])
             cursor = conn.execute("""
                 SELECT message FROM alerts
                 WHERE alert_type = 'hot_analysis'
-                AND created_at > datetime('now', '-4 hours')
                 ORDER BY created_at DESC LIMIT 1
             """)
             last_row = cursor.fetchone()
             last_topics = last_row[0] if last_row else ""
 
-            # 如果前5热搜有变化（至少2个新的），才重新分析
+            # 前10热搜有1个以上变化就重新分析（热搜变化快，要及时）
             if last_topics:
                 old_set = set(last_topics.split("|"))
-                new_count = len(current_top5 - old_set)
-                should_analyze = new_count >= 2
+                new_count = len(current_top - old_set)
+                should_analyze = new_count >= 1
             else:
                 should_analyze = True
 
@@ -172,7 +171,7 @@ def run_collection(hot_only: bool = False, notify: bool = True):
                         print("     今天热搜没有能自然关联手工的")
                     # 保存本次分析的热搜词（用于下次去重）
                     save_alert(conn, "hot_search", "hot_analysis", 0,
-                               "|".join(current_top5))
+                               "|".join(current_top))
                     ai.close()
                 except Exception as e:
                     print(f"     热搜 AI 分析失败: {e}")
@@ -258,16 +257,16 @@ def run_collection(hot_only: bool = False, notify: bool = True):
             else:
                 print("  ℹ️  起势视频均已推送过，无新增")
 
-        # 同行 TOP 视频推送（每天推一次，近半月表现最好的）
+        # 同行 TOP 视频推送（每天只推一次，检查24小时内是否已推过）
         if notify and not hot_only:
             cursor = conn.execute("""
                 SELECT COUNT(*) FROM alerts
                 WHERE alert_type = 'peer_top'
-                AND created_at > datetime('now', '-24 hours')
+                AND created_at > datetime('now', '-20 hours')
             """)
             already_sent_top = cursor.fetchone()[0]
 
-            if already_sent_top == 0:
+            if already_sent_top == 0 and all_videos:
                 print("  📊 生成同行 TOP 视频...")
                 cursor = conn.execute("""
                     SELECT v.id, v.title, v.author_id, v.created_at,
