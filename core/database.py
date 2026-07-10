@@ -92,10 +92,36 @@ def init_db():
             score REAL,
             message TEXT,
             sent INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (video_id) REFERENCES videos(id)
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # 迁移：去掉 alerts 表的外键约束（旧版本有 FOREIGN KEY）
+    try:
+        conn.execute("SELECT video_id FROM alerts WHERE video_id = 'hot_search' LIMIT 1")
+    except Exception:
+        # 如果查询失败或表结构有问题，重建 alerts 表
+        try:
+            conn.execute("ALTER TABLE alerts RENAME TO alerts_old")
+            conn.execute("""
+                CREATE TABLE alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    video_id TEXT,
+                    alert_type TEXT,
+                    score REAL,
+                    message TEXT,
+                    sent INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("""
+                INSERT INTO alerts (video_id, alert_type, score, message, sent, created_at)
+                SELECT video_id, alert_type, score, message, sent, created_at FROM alerts_old
+            """)
+            conn.execute("DROP TABLE alerts_old")
+            print("[MIGRATE] alerts 表已迁移（去掉外键约束）")
+        except Exception as e:
+            print(f"[WARN] alerts 迁移失败: {e}")
 
     conn.commit()
     return conn
