@@ -1,18 +1,21 @@
-"""API - 企业微信回调验证
+"""API - 企业微信回调（URL 验证 + 消息接收）
 
-企微配置"接收消息服务器"时会发 GET 请求验证：
-1. 校验签名 (SHA1)
-2. 解密 echostr (AES-CBC)
-3. 返回解密后的明文
+GET: 企微配置"接收消息服务器"时的 URL 验证（签名校验 + AES 解密 echostr）
+POST: 接收群聊 @机器人 的消息，交给 ChatHandler 处理
 """
 
 import os
+import sys
 import json
 import hashlib
 import base64
 import struct
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+from xml.etree import ElementTree
+
+# 让 api/ 下的文件能 import core/
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 从环境变量读取
 TOKEN = os.environ.get("WECOM_CALLBACK_TOKEN", "")
@@ -98,7 +101,56 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(reply_echostr.encode())
 
     def do_POST(self):
-        """接收企微推送的消息（暂不处理）"""
+        """接收企微推送的消息，交给 ChatHandler 处理"""
+        try:
+            # 读取请求体
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8") if content_length else ""
+
+            # 从 query string 取验签参数
+            query = parse_qs(urlparse(self.path).query)
+            msg_signature = query.get("msg_signature", [""])[0]
+            timestamp = query.get("timestamp", [""])[0]
+            nonce = query.get("nonce", [""])[0]
+
+            # 解析外层 XML 提取 <Encrypt>
+            xml_root = ElementTree.fromstring(body)
+            encrypt_str = xml_root.findtext("Encrypt") or ""
+
+            if not encrypt_str:
+                print("[CALLBACK] POST body 无 <Encrypt> 字段")
+                self._reply_success()
+                return
+
+            # 验签
+            if msg_signature and not verify_signature(TOKEN, timestamp, nonce, encrypt_str, msg_signature):
+                print("[CALLBACK] POST 签名验证失败")
+                self._reply_success()
+                return
+
+            # AES 解密
+            try:
+                decrypted_xml = decrypt_message(ENCODING_AES_KEY, encrypt_str)
+            except Exception as e:
+                print(f"[CALLBACK] POST 解密失败: {e}")
+                self._reply_success()
+                return
+
+            # 交给 ChatHandler 处理
+            from core.chat_handler import ChatHandler
+            chat = ChatHandler()
+            try:
+                chat.handle(decrypted_xml)
+            finally:
+                chat.close()
+
+        except Exception as e:
+            print(f"[CALLBACK] do_POST 异常: {e}")
+
+        self._reply_success()
+
+    def _reply_success(self):
+        """返回 200 success（企微要求）"""
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
