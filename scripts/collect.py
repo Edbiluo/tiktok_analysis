@@ -138,45 +138,53 @@ def run_collection(hot_only: bool = False, notify: bool = True):
         hot_topics = collect_hot_search(client, conn)
         print(f"     获取到 {len(hot_topics)} 条热搜")
 
-        # 热搜 AI 分析（核心高频功能，每次热搜有变化就分析）
+        # 热搜 AI 分析
         if notify and hot_topics and Config.AI_GATEWAY_KEY:
-            # 取当前热搜前10的标题，和上次对比
-            current_top = set(t.get('title', '') for t in hot_topics[:10])
+            # 获取最近24小时内已推送过的热搜话题
             cursor = conn.execute("""
                 SELECT message FROM alerts
-                WHERE alert_type = 'hot_analysis'
-                ORDER BY created_at DESC LIMIT 1
+                WHERE alert_type = 'hot_opportunity'
+                AND created_at > datetime('now', '-24 hours')
             """)
-            last_row = cursor.fetchone()
-            last_topics = last_row[0] if last_row else ""
+            already_pushed_topics = set()
+            for row in cursor.fetchall():
+                if row[0]:
+                    already_pushed_topics.add(row[0])
 
-            # 前10热搜有1个以上变化就重新分析（热搜变化快，要及时）
-            if last_topics:
-                old_set = set(last_topics.split("|"))
-                new_count = len(current_top - old_set)
-                should_analyze = new_count >= 1
-            else:
-                should_analyze = True
+            # 检查最近2小时是否分析过（避免频繁调AI浪费token）
+            cursor = conn.execute("""
+                SELECT COUNT(*) FROM alerts
+                WHERE alert_type = 'hot_analysis'
+                AND created_at > datetime('now', '-2 hours')
+            """)
+            recently_analyzed = cursor.fetchone()[0] > 0
 
-            if should_analyze:
-                print("  🧠 AI 分析热搜蹭热度机会...")
+            if not recently_analyzed:
+                print("  🧠 AI 分析热搜...")
                 try:
                     ai = AIAnalyzer()
                     hot_analysis = ai.analyze_hot_topics(hot_topics)
                     opps = hot_analysis.get("opportunities", [])
-                    if opps:
-                        print(f"     发现 {len(opps)} 个蹭热度机会，推送中...")
+
+                    # 过滤掉已推送过的话题
+                    new_opps = [o for o in opps if o.get("topic", "") not in already_pushed_topics]
+
+                    if new_opps:
+                        hot_analysis["opportunities"] = new_opps
+                        print(f"     发现 {len(new_opps)} 个新机会，推送中...")
                         notifier.send_hot_opportunities(hot_analysis)
+                        # 记录每个推送过的话题
+                        for opp in new_opps:
+                            save_alert(conn, "hot_opp", "hot_opportunity", 0, opp.get("topic", ""))
                     else:
-                        print("     今天热搜没有能自然关联手工的")
-                    # 保存本次分析的热搜词（用于下次去重）
-                    save_alert(conn, "hot_search", "hot_analysis", 0,
-                               "|".join(current_top))
+                        print("     没有新的相关热搜")
+
+                    save_alert(conn, "hot_search", "hot_analysis", 0, "analyzed")
                     ai.close()
                 except Exception as e:
                     print(f"     热搜 AI 分析失败: {e}")
             else:
-                print("  ℹ️  最近 1 小时已分析过热搜，跳过")
+                print("  ℹ️  最近 2 小时已分析过热搜，跳过")
 
         if not hot_only:
             # 同行采集降频：检查最近 2 小时是否已采集过
