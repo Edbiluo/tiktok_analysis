@@ -231,3 +231,62 @@ def get_author_avg_stats(conn, author_id: str, recent_count: int = 20):
             "avg_plays": row[4] or 0,
         }
     return None
+
+
+# ========== 聊天交互用查询 ==========
+
+
+def get_top_videos(conn, limit: int = 5):
+    """获取同行近期 TOP 视频（按点赞排序）"""
+    cursor = conn.execute("""
+        SELECT v.id, v.title, a.nickname as author_name,
+               vs.like_count, vs.comment_count, vs.collect_count
+        FROM videos v
+        JOIN authors a ON v.author_id = a.id
+        JOIN video_snapshots vs ON v.id = vs.video_id
+        WHERE a.is_monitored = 1
+        AND v.created_at > strftime('%s', 'now', '-15 days')
+        AND vs.id IN (SELECT MAX(id) FROM video_snapshots GROUP BY video_id)
+        ORDER BY vs.like_count DESC
+        LIMIT ?
+    """, (limit,))
+    rows = cursor.fetchall()
+    return [{
+        "id": r[0], "title": r[1], "author_name": r[2],
+        "like_count": r[3], "comment_count": r[4], "collect_count": r[5],
+    } for r in rows] if rows else []
+
+
+def get_recent_hot_topics(conn, limit: int = 10):
+    """获取最近一批热搜"""
+    cursor = conn.execute("""
+        SELECT title, hot_value FROM trending_topics
+        ORDER BY snapshot_at DESC, hot_value DESC
+        LIMIT ?
+    """, (limit,))
+    rows = cursor.fetchall()
+    return [{"title": r[0], "hot_value": r[1]} for r in rows] if rows else []
+
+
+def get_system_status(conn):
+    """获取系统运行状态摘要"""
+    status = {}
+
+    cursor = conn.execute("SELECT COUNT(*) FROM authors WHERE is_monitored = 1")
+    status["monitored_authors"] = cursor.fetchone()[0]
+
+    cursor = conn.execute("SELECT COUNT(*) FROM videos")
+    status["total_videos"] = cursor.fetchone()[0]
+
+    cursor = conn.execute("SELECT MAX(snapshot_at) FROM video_snapshots")
+    row = cursor.fetchone()
+    status["last_snapshot"] = row[0] if row and row[0] else "暂无"
+
+    cursor = conn.execute("""
+        SELECT COUNT(*) FROM alerts
+        WHERE created_at > datetime('now', '-24 hours')
+        AND alert_type IN ('explosive', 'trending', 'potential')
+    """)
+    status["recent_alerts"] = cursor.fetchone()[0]
+
+    return status
