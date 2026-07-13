@@ -110,18 +110,40 @@ class Notifier:
             return False
 
         sections = []
-        for i, v in enumerate(top_videos[:5], 1):
+        for i, v in enumerate(top_videos[:10], 1):
             section = f"""{i}. **{v.get('title', '无标题')[:25]}**
 > @{v.get('author_name', '')} | 赞 {self._fmt(v.get('like_count', 0))} | 评 {self._fmt(v.get('comment_count', 0))} | 藏 {self._fmt(v.get('collect_count', 0))}
-> 🔗 [查看](https://www.douyin.com/video/{v.get('id', '')})
+> [查看](https://www.douyin.com/video/{v.get('id', '')})
 """
             sections.append(section)
 
-        content = f"""👥 <font color="info">同行近期热门作品 TOP5</font>
+        content = f"""👥 <font color="info">同行近半月热门 TOP{len(top_videos)}</font>
 
 {"".join(sections)}"""
 
         return self.send_markdown(content)
+
+    def send_morning_report(self, top_videos: list, hot_topics: list) -> bool:
+        """每日早报：同行TOP10 + 热搜排行"""
+        import time as _time
+
+        # 第一条：同行 TOP10
+        if top_videos:
+            self.send_peer_top_videos(top_videos)
+            _time.sleep(2)
+
+        # 第二条：热搜 TOP15
+        if hot_topics:
+            topics_text = "\n".join([
+                f"{i}. {t.get('title', '')} ({self._fmt(t.get('hot_value', 0))})"
+                for i, t in enumerate(hot_topics[:15], 1)
+            ])
+            content = f"""📈 <font color="info">当前抖音热搜</font>
+
+{topics_text}"""
+            self.send_markdown(content)
+
+        return True
 
     @staticmethod
     def _fmt(num: int) -> str:

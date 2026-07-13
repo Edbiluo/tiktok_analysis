@@ -32,6 +32,12 @@ def init_db():
     """初始化数据库表"""
     conn = get_connection()
 
+    # 关闭外键检查（兼容旧表结构）
+    try:
+        conn.execute("PRAGMA foreign_keys = OFF")
+    except Exception:
+        pass
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS authors (
             id TEXT PRIMARY KEY,
@@ -96,13 +102,13 @@ def init_db():
         )
     """)
 
-    # 迁移：去掉 alerts 表的外键约束（旧版本有 FOREIGN KEY）
+    # 强制重建 alerts 表去掉外键（Turso 上旧表有 FOREIGN KEY 导致插入失败）
     try:
-        conn.execute("SELECT video_id FROM alerts WHERE video_id = 'hot_search' LIMIT 1")
-    except Exception:
-        # 如果查询失败或表结构有问题，重建 alerts 表
-        try:
-            conn.execute("ALTER TABLE alerts RENAME TO alerts_old")
+        # 检测是否有外键约束
+        cursor = conn.execute("PRAGMA foreign_key_list('alerts')")
+        fkeys = cursor.fetchall()
+        if fkeys:
+            conn.execute("ALTER TABLE alerts RENAME TO _alerts_old")
             conn.execute("""
                 CREATE TABLE alerts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,13 +121,12 @@ def init_db():
                 )
             """)
             conn.execute("""
-                INSERT INTO alerts (video_id, alert_type, score, message, sent, created_at)
-                SELECT video_id, alert_type, score, message, sent, created_at FROM alerts_old
+                INSERT INTO alerts SELECT * FROM _alerts_old
             """)
-            conn.execute("DROP TABLE alerts_old")
-            print("[MIGRATE] alerts 表已迁移（去掉外键约束）")
-        except Exception as e:
-            print(f"[WARN] alerts 迁移失败: {e}")
+            conn.execute("DROP TABLE _alerts_old")
+            print("[MIGRATE] alerts 表已重建（去掉外键）")
+    except Exception:
+        pass  # PRAGMA 可能在 Turso 上不支持，跳过
 
     conn.commit()
     return conn

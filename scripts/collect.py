@@ -257,17 +257,21 @@ def run_collection(hot_only: bool = False, notify: bool = True):
             else:
                 print("  ℹ️  起势视频均已推送过，无新增")
 
-        # 同行 TOP 视频推送（每天只推一次，检查24小时内是否已推过）
+        # 同行 TOP10 + 热搜排行（每天上午10点推一次）
         if notify and not hot_only:
+            import datetime
+            beijing_hour = (datetime.datetime.utcnow().hour + 8) % 24
+
             cursor = conn.execute("""
                 SELECT COUNT(*) FROM alerts
-                WHERE alert_type = 'peer_top'
+                WHERE alert_type = 'daily_morning'
                 AND created_at > datetime('now', '-20 hours')
             """)
-            already_sent_top = cursor.fetchone()[0]
+            already_sent = cursor.fetchone()[0]
 
-            if already_sent_top == 0 and all_videos:
-                print("  📊 生成同行 TOP 视频...")
+            # 北京时间 9-11 点之间，且今天没发过
+            if 9 <= beijing_hour <= 11 and already_sent == 0:
+                print("  📊 生成每日早报（同行TOP10 + 热搜）...")
                 cursor = conn.execute("""
                     SELECT v.id, v.title, v.author_id, v.created_at,
                            a.nickname as author_name,
@@ -279,20 +283,18 @@ def run_collection(hot_only: bool = False, notify: bool = True):
                     AND v.created_at > strftime('%s', 'now', '-15 days')
                     AND vs.id IN (SELECT MAX(id) FROM video_snapshots GROUP BY video_id)
                     ORDER BY vs.like_count DESC
-                    LIMIT 5
+                    LIMIT 10
                 """)
                 top_rows = cursor.fetchall()
-                if top_rows:
-                    top_videos = [{
-                        "id": r[0], "title": r[1], "author_id": r[2], "created_at": r[3],
-                        "author_name": r[4], "like_count": r[5], "comment_count": r[6],
-                        "collect_count": r[7], "share_count": r[8], "play_count": r[9],
-                    } for r in top_rows]
-                    notifier.send_peer_top_videos(top_videos)
-                    save_alert(conn, "peer_top", "peer_top", 0, "同行TOP5推送")
-                    print(f"     推送了 {len(top_videos)} 条同行热门视频")
-                else:
-                    print("     暂无近半月同行视频数据")
+                top_videos = [{
+                    "id": r[0], "title": r[1], "author_id": r[2], "created_at": r[3],
+                    "author_name": r[4], "like_count": r[5], "comment_count": r[6],
+                    "collect_count": r[7], "share_count": r[8], "play_count": r[9],
+                } for r in top_rows] if top_rows else []
+
+                notifier.send_morning_report(top_videos, hot_topics)
+                save_alert(conn, "morning", "daily_morning", 0, "每日早报")
+                print("     ✅ 每日早报已推送")
 
         # 输出报告
         print("\n" + "=" * 50)
